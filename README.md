@@ -1,218 +1,130 @@
-# Payload Plugin Template
+# plugin-nested-docs-page-tree
 
-A template repo to create a [Payload CMS](https://payloadcms.com) plugin.
+Companion admin plugin for [`@payloadcms/plugin-nested-docs`](https://payloadcms.com/docs/plugins/nested-docs).
 
-Payload is built with a robust infrastructure intended to support Plugins with ease. This provides a simple, modular, and reusable way for developers to extend the core capabilities of Payload.
+<img alt="Page tree demo" src="assets/page-tree.gif" width="100%" />
 
-To build your own Payload plugin, all you need is:
+Adds a nested tree list view for nested docs collections in Payload admin, with drag-and-drop parent changes and status badges for published / changed / draft documents.
 
-- An understanding of the basic Payload concepts
-- And some JavaScript/Typescript experience
+It works alongside `@payloadcms/plugin-nested-docs`. It does not replace nested docs persistence, breadcrumbs generation, or routing.
 
-## Background
+Tested with Payload `3.81` and Next.js `16.2`.
 
-Here is a short recap on how to integrate plugins with Payload, to learn more visit the [plugin overview page](https://payloadcms.com/docs/plugins/overview).
 
-### How to install a plugin
+## Install
 
-To install any plugin, simply add it to your payload.config() in the Plugin array.
-
-```ts
-import myPlugin from 'my-plugin'
-
-export const config = buildConfig({
-  plugins: [
-    // You can pass options to the plugin
-    myPlugin({
-      enabled: true,
-    }),
-  ],
-})
+```bash
+pnpm add plugin-nested-docs-page-tree
 ```
 
-### Initialization
+## Quick Setup
 
-The initialization process goes in the following order:
+`@payloadcms/plugin-nested-docs` should already be installed, and each target collection should already have:
 
-1. Incoming config is validated
-2. **Plugins execute**
-3. Default options are integrated
-4. Sanitization cleans and validates data
-5. Final config gets initialized
+- a nested docs parent field
+- a nested docs breadcrumbs field
+- a top-level `admin.useAsTitle` field
 
-## Building the Plugin
-
-When you build a plugin, you are purely building a feature for your project and then abstracting it outside of the project.
-
-### Template Files
-
-In the Payload [plugin template](https://github.com/payloadcms/payload/tree/main/templates/plugin), you will see a common file structure that is used across all plugins:
-
-1. root folder
-2. /src folder
-3. /dev folder
-
-#### Root
-
-In the root folder, you will see various files that relate to the configuration of the plugin. We set up our environment in a similar manner in Payload core and across other projects, so hopefully these will look familiar:
-
-- **README**.md\* - This contains instructions on how to use the template. When you are ready, update this to contain instructions on how to use your Plugin.
-- **package**.json\* - Contains necessary scripts and dependencies. Overwrite the metadata in this file to describe your Plugin.
-- .**eslint**.config.js - Eslint configuration for reporting on problematic patterns.
-- .**gitignore** - List specific untracked files to omit from Git.
-- .**prettierrc**.json - Configuration for Prettier code formatting.
-- **tsconfig**.json - Configures the compiler options for TypeScript
-- .**swcrc** - Configuration for SWC, a fast compiler that transpiles and bundles TypeScript.
-- **vitest**.config.js - Config file for Vitest, defining how tests are run and how modules are resolved
-
-**IMPORTANT\***: You will need to modify these files.
-
-#### Dev
-
-In the dev folder, you’ll find a basic payload project, created with `npx create-payload-app` and the blank template.
-
-**IMPORTANT**: Make a copy of the `.env.example` file and rename it to `.env`. Update the `DATABASE_URL` to match the database you are using and your plugin name. Update `PAYLOAD_SECRET` to a unique string.
-**You will not be able to run `pnpm/yarn dev` until you have created this `.env` file.**
-
-`myPlugin` has already been added to the `payload.config()` file in this project.
+Add `nestedDocsPageTreePlugin(...)` right after `nestedDocsPlugin(...)`:
 
 ```ts
-plugins: [
-  myPlugin({
-    collections: {
-      posts: true,
-    },
+import { nestedDocsPlugin } from '@payloadcms/plugin-nested-docs'
+import { nestedDocsPageTreePlugin } from 'plugin-nested-docs-page-tree'
+
+export const plugins = [
+  nestedDocsPlugin({
+    // your existing nested docs config
+  }),
+  nestedDocsPageTreePlugin({
+    collections: ['pages'],
   }),
 ]
 ```
 
-Later when you rename the plugin or add additional options, **make sure to update it here**.
+If needed, refresh the admin import map:
 
-You may wish to add collections or expand the test project depending on the purpose of your plugin. Just make sure to keep this dev environment as simplified as possible - users should be able to install your plugin without additional configuration required.
-
-When you’re ready to start development, initiate the project with `pnpm/npm/yarn dev` and pull up [http://localhost:3000](http://localhost:3000) in your browser.
-
-#### Src
-
-Now that we have our environment setup and we have a dev project ready to - it’s time to build the plugin!
-
-**index.ts**
-
-The essence of a Payload plugin is simply to extend the payload config - and that is exactly what we are doing in this file.
-
-```ts
-export const myPlugin =
-  (pluginOptions: MyPluginConfig) =>
-  (config: Config): Config => {
-    // do cool stuff with the config here
-
-    return config
-  }
+```bash
+payload generate:importmap
 ```
 
-First, we receive the existing payload config along with any plugin options.
+## What It Adds
 
-From here, you can extend the config as you wish.
+- replaces the collection list view with a nested tree table
+- preserves sorting, filters, pagination, bulk selection, and row actions
+- adds `POST /:id/move` for drag-and-drop parent changes
+- hides the read-only breadcrumbs field by default
 
-Finally, you return the config and that is it!
+## Status Badges
 
-##### Spread Syntax
+The tree view supports three document states:
 
-Spread syntax (or the spread operator) is a feature in JavaScript that uses the dot notation **(...)** to spread elements from arrays, strings, or objects into various contexts.
+- `published`: live and up to date
+- `changed`: live, but has unpublished changes
+- `draft`: not published
 
-We are going to use spread syntax to allow us to add data to existing arrays without losing the existing data. It is crucial to spread the existing data correctly – else this can cause adverse behavior and conflicts with Payload config and other plugins.
-
-Let’s say you want to build a plugin that adds a new collection:
-
-```ts
-config.collections = [
-  ...(config.collections || []),
-  // Add additional collections here
-]
-```
-
-First we spread the `config.collections` to ensure that we don’t lose the existing collections, then you can add any additional collections just as you would in a regular payload config.
-
-This same logic is applied to other properties like admin, hooks, globals:
+To override badge labels or colors, pass a `badges` object:
 
 ```ts
-config.globals = [
-  ...(config.globals || []),
-  // Add additional globals here
-]
-
-config.hooks = {
-  ...(incomingConfig.hooks || {}),
-  // Add additional hooks here
-}
+nestedDocsPageTreePlugin({
+  collections: ['pages'],
+  badges: {
+    labels: {
+      published: 'Live',
+      changed: 'Has Changes',
+      draft: 'Draft Only',
+    },
+    colors: {
+      published: '#1e90ff',
+      changed: '#9333ea',
+      draft: '#dc2626',
+    },
+  },
+}),
 ```
 
-Some properties will be slightly different to extend, for instance the onInit property:
+`labels` and `colors` are optional partial overrides. Missing entries fall back to the built-in defaults.
 
-```ts
-import { onInitExtension } from './onInitExtension' // example file
+## Configuration
 
-config.onInit = async (payload) => {
-  if (incomingConfig.onInit) await incomingConfig.onInit(payload)
-  // Add additional onInit code by defining an onInitExtension function
-  onInitExtension(pluginOptions, payload)
-}
+- `collections`: target collection slugs
+- `parentFieldSlug`: defaults to `'parent'`
+- `breadcrumbsFieldSlug`: defaults to `'breadcrumbs'`
+- `defaultLimit`: defaults to `100`
+- `hideBreadcrumbs`: defaults to `true`
+- `disabled`: defaults to `false`
+- `badges`: optional label and color overrides for `published`, `changed`, and `draft`
+
+## Development
+
+For local plugin development, use the internal `dev/` app:
+
+```bash
+pnpm install
+pnpm dev
+pnpm generate:types
+pnpm generate:importmap
 ```
 
-If you wish to add to the onInit, you must include the **async/await**. We don’t use spread syntax in this case, instead you must await the existing `onInit` before running additional functionality.
+Plugin source is in `src/`. The internal test app is in `dev/`.
 
-In the template, we have stubbed out some addition `onInit` actions that seeds in a document to the `plugin-collection`, you can use this as a base point to add more actions - and if not needed, feel free to delete it.
+For checks:
 
-##### Types.ts
-
-If your plugin has options, you should define and provide types for these options.
-
-```ts
-export type MyPluginConfig = {
-  /**
-   * List of collections to add a custom field
-   */
-  collections?: Partial<Record<CollectionSlug, true>>
-  /**
-   * Disable the plugin
-   */
-  disabled?: boolean
-}
+```bash
+pnpm test:int
+pnpm exec tsc --noEmit
 ```
 
-If possible, include JSDoc comments to describe the options and their types. This allows a developer to see details about the options in their editor.
+## Test in Another Project
 
-##### Testing
+For release validation, test the packed artifact instead of a live source-folder dependency:
 
-Having a test suite for your plugin is essential to ensure quality and stability. **Vitest** is a fast, modern testing framework that works seamlessly with Vite and supports TypeScript out of the box.
-
-Vitest organizes tests into test suites and cases, similar to other testing frameworks. We recommend creating individual tests based on the expected behavior of your plugin from start to finish.
-
-Writing tests with Vitest is very straightforward, and you can learn more about how it works in the [Vitest documentation.](https://vitest.dev/)
-
-For this template, we stubbed out `int.spec.ts` in the `dev` folder where you can write your tests.
-
-```ts
-describe('Plugin tests', () => {
-  // Create tests to ensure expected behavior from the plugin
-  it('some condition that must be met', () => {
-   // Write your test logic here
-   expect(...)
-  })
-})
+```bash
+pnpm build
+pnpm pack
 ```
 
-## Best practices
+Then in the external consumer app:
 
-With this tutorial and the plugin template, you should have everything you need to start building your own plugin.
-In addition to the setup, here are other best practices aim we follow:
-
-- **Providing an enable / disable option:** For a better user experience, provide a way to disable the plugin without uninstalling it. This is especially important if your plugin adds additional webpack aliases, this will allow you to still let the webpack run to prevent errors.
-- **Include tests in your GitHub CI workflow**: If you’ve configured tests for your package, integrate them into your workflow to run the tests each time you commit to the plugin repository. Learn more about [how to configure tests into your GitHub CI workflow.](https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs)
-- **Publish your finished plugin to NPM**: The best way to share and allow others to use your plugin once it is complete is to publish an NPM package. This process is straightforward and well documented, find out more [creating and publishing a NPM package here.](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/).
-- **Add payload-plugin topic tag**: Apply the tag **payload-plugin **to your GitHub repository. This will boost the visibility of your plugin and ensure it gets listed with [existing payload plugins](https://github.com/topics/payload-plugin).
-- **Use [Semantic Versioning](https://semver.org/) (SemVar)** - With the SemVar system you release version numbers that reflect the nature of changes (major, minor, patch). Ensure all major versions reference their Payload compatibility.
-
-# Questions
-
-Please contact [Payload](mailto:dev@payloadcms.com) with any questions about using this plugin template.
+```bash
+pnpm add /path/plugin-nested-docs-page-tree-*.tgz
+```

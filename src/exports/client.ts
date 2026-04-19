@@ -1,1 +1,1 @@
-export { BeforeDashboardClient } from '../components/BeforeDashboardClient.js'
+export { default as PageTreeListViewClient } from '../components/PageTreeListView.client.js'

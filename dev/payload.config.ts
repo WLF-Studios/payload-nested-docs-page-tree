@@ -1,9 +1,10 @@
 import { mongooseAdapter } from '@payloadcms/db-mongodb'
+import { nestedDocsPlugin } from '@payloadcms/plugin-nested-docs'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { MongoMemoryReplSet } from 'mongodb-memory-server'
 import path from 'path'
-import { buildConfig } from 'payload'
-import { payloadPageTree } from 'payload-page-tree'
+import { buildConfig, slugField, type CollectionConfig } from 'payload'
+import { nestedDocsPageTreePlugin } from '../src/index.js'
 import sharp from 'sharp'
 import { fileURLToPath } from 'url'
 
@@ -16,6 +17,88 @@ const dirname = path.dirname(filename)
 if (!process.env.ROOT_DIR) {
   process.env.ROOT_DIR = dirname
 }
+
+const Users: CollectionConfig = {
+  slug: 'users',
+  auth: true,
+  fields: [],
+}
+
+const Pages: CollectionConfig = {
+  slug: 'pages',
+  access: {
+    create: ({ req }) => Boolean(req.user),
+    delete: ({ req }) => Boolean(req.user),
+    read: () => true,
+    update: ({ req }) => Boolean(req.user),
+  },
+  admin: {
+    defaultColumns: ['title', 'publishedAt', 'updatedAt', 'parent', 'slug', '_status'],
+    pagination: {
+      defaultLimit: 100,
+    },
+    useAsTitle: 'title',
+  },
+  fields: [
+    {
+      name: 'title',
+      type: 'text',
+      localized: true,
+      required: true,
+    },
+    {
+      name: 'publishedAt',
+      label: 'Published',
+      type: 'date',
+      admin: {
+        date: {
+          pickerAppearance: 'dayAndTime',
+        },
+        position: 'sidebar',
+        readOnly: true,
+      },
+    },
+    slugField(),
+  ],
+  versions: {
+    drafts: {
+      autosave: {
+        interval: 100,
+      },
+    },
+    maxPerDoc: 20,
+  },
+}
+
+const Categories: CollectionConfig = {
+  slug: 'categories',
+  access: {
+    create: ({ req }) => Boolean(req.user),
+    delete: ({ req }) => Boolean(req.user),
+    read: () => true,
+    update: ({ req }) => Boolean(req.user),
+  },
+  admin: {
+    pagination: {
+      defaultLimit: 100,
+    },
+    useAsTitle: 'title',
+  },
+  fields: [
+    {
+      name: 'title',
+      type: 'text',
+      required: true,
+    },
+    slugField(),
+  ],
+}
+
+const buildNestedDocURL = (docs: Array<Record<string, unknown>>): string =>
+  docs.reduce((url, doc) => {
+    const slug = typeof doc.slug === 'string' ? doc.slug.replace(/^\/+|\/+$/g, '') : ''
+    return slug ? `${url}/${slug}` : url
+  }, '')
 
 const buildConfigWithMemoryDB = async () => {
   if (process.env.NODE_ENV === 'test') {
@@ -34,34 +117,41 @@ const buildConfigWithMemoryDB = async () => {
       importMap: {
         baseDir: path.resolve(dirname),
       },
+      user: Users.slug,
     },
-    collections: [
-      {
-        slug: 'posts',
-        fields: [],
-      },
-      {
-        slug: 'media',
-        fields: [],
-        upload: {
-          staticDir: path.resolve(dirname, 'media'),
-        },
-      },
-    ],
+    collections: [Users, Pages, Categories],
     db: mongooseAdapter({
       ensureIndexes: true,
       url: process.env.DATABASE_URL || '',
     }),
     editor: lexicalEditor(),
     email: testEmailAdapter,
+    localization: {
+      defaultLocale: 'en',
+      fallback: false,
+      locales: ['en', 'de'],
+    },
     onInit: async (payload) => {
       await seed(payload)
     },
     plugins: [
-      payloadPageTree({
-        collections: {
-          posts: true,
+      nestedDocsPlugin({
+        collections: ['pages', 'categories'],
+        generateLabel: (_, doc) => {
+          if (typeof doc.title === 'string' && doc.title.trim()) {
+            return doc.title
+          }
+
+          if (typeof doc.slug === 'string' && doc.slug.trim()) {
+            return doc.slug
+          }
+
+          return String(doc.id ?? '')
         },
+        generateURL: (docs) => buildNestedDocURL(docs),
+      }),
+      nestedDocsPageTreePlugin({
+        collections: ['pages', 'categories'],
       }),
     ],
     secret: process.env.PAYLOAD_SECRET || 'test-secret_key',

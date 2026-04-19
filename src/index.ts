@@ -1,113 +1,223 @@
-import type { CollectionSlug, Config } from 'payload'
+import type { CollectionConfig, Config } from 'payload'
 
-import { customEndpointHandler } from './endpoints/customEndpointHandler.js'
+import { createMovePageEndpoint } from './endpoints/createMovePageEndpoint.js'
+import type {
+  NestedDocsPageTreePluginCollectionCustom,
+  NestedDocsPageTreePluginConfig,
+} from './types.js'
+import { nestedDocsPageTreePluginCustomKey } from './types.js'
+import { normalizeNestedDocsPageTreePluginBadgeConfig } from './utilities/badgeConfig.js'
 
-export type PayloadPageTreeConfig = {
-  /**
-   * List of collections to add a custom field
-   */
-  collections?: Partial<Record<CollectionSlug, true>>
-  disabled?: boolean
+const DEFAULT_BREADCRUMBS_FIELD_SLUG = 'breadcrumbs'
+const DEFAULT_LIMIT = 100
+const DEFAULT_PARENT_FIELD_SLUG = 'parent'
+const PAGE_TREE_LIST_VIEW_PATH =
+  'plugin-nested-docs-page-tree/rsc#NestedDocsPageTreeListView'
+type CollectionEndpoint = NonNullable<Exclude<CollectionConfig['endpoints'], false>>[number]
+
+function getTopLevelField(
+  collection: Pick<CollectionConfig, 'fields'>,
+  fieldName: string,
+) {
+  return collection.fields.find((field) => 'name' in field && field.name === fieldName)
 }
 
-export const payloadPageTree =
-  (pluginOptions: PayloadPageTreeConfig) =>
+function getCollectionEndpoints(collection: CollectionConfig): CollectionEndpoint[] {
+  return Array.isArray(collection.endpoints) ? [...collection.endpoints] : []
+}
+
+function patchBreadcrumbField<TField extends CollectionConfig['fields'][number]>(args: {
+  breadcrumbsFieldSlug: string
+  field: TField
+  hideBreadcrumbs: boolean
+}): TField {
+  const { breadcrumbsFieldSlug, field, hideBreadcrumbs } = args
+
+  if (!('name' in field) || field.name !== breadcrumbsFieldSlug) {
+    return field
+  }
+
+  return {
+    ...field,
+    admin: {
+      ...(field.admin ?? {}),
+      hidden: hideBreadcrumbs,
+    },
+  } as TField
+}
+
+function validateTargetCollection(args: {
+  breadcrumbsFieldSlug: string
+  collection: CollectionConfig
+  parentFieldSlug: string
+}) {
+  const { breadcrumbsFieldSlug, collection, parentFieldSlug } = args
+
+  if (typeof collection.admin?.useAsTitle !== 'string' || collection.admin.useAsTitle.includes('.')) {
+    throw new Error(
+      `plugin-nested-docs-page-tree requires "${collection.slug}" to define a top-level admin.useAsTitle field.`,
+    )
+  }
+
+  if (!getTopLevelField(collection, collection.admin.useAsTitle)) {
+    throw new Error(
+      `plugin-nested-docs-page-tree could not find the useAsTitle field "${collection.admin.useAsTitle}" on "${collection.slug}".`,
+    )
+  }
+
+  if (!getTopLevelField(collection, parentFieldSlug)) {
+    throw new Error(
+      `plugin-nested-docs-page-tree requires "${collection.slug}" to already define the nested docs parent field "${parentFieldSlug}". Register @payloadcms/plugin-nested-docs before plugin-nested-docs-page-tree.`,
+    )
+  }
+
+  if (!getTopLevelField(collection, breadcrumbsFieldSlug)) {
+    throw new Error(
+      `plugin-nested-docs-page-tree requires "${collection.slug}" to already define the nested docs breadcrumbs field "${breadcrumbsFieldSlug}". Register @payloadcms/plugin-nested-docs before plugin-nested-docs-page-tree.`,
+    )
+  }
+
+  const existingListView = collection.admin?.components?.views?.list?.Component
+
+  if (existingListView && existingListView !== PAGE_TREE_LIST_VIEW_PATH) {
+    throw new Error(
+      `plugin-nested-docs-page-tree cannot own the "${collection.slug}" list view because the collection already defines a custom admin.components.views.list.Component.`,
+    )
+  }
+
+  const existingMoveEndpoint = getCollectionEndpoints(collection).find(
+    (endpoint) => endpoint.path === '/:id/move',
+  )
+
+  if (existingMoveEndpoint) {
+    throw new Error(
+      `plugin-nested-docs-page-tree cannot add the move endpoint to "${collection.slug}" because the collection already defines POST /:id/move.`,
+    )
+  }
+}
+
+function buildCollectionCustom(args: {
+  badges: NestedDocsPageTreePluginCollectionCustom['badges']
+  breadcrumbsFieldSlug: string
+  defaultLimit: number
+  hideBreadcrumbs: boolean
+  parentFieldSlug: string
+}): NestedDocsPageTreePluginCollectionCustom {
+  const { badges, breadcrumbsFieldSlug, defaultLimit, hideBreadcrumbs, parentFieldSlug } = args
+
+  return {
+    badges,
+    breadcrumbsFieldSlug,
+    defaultLimit,
+    hideBreadcrumbs,
+    parentFieldSlug,
+  }
+}
+
+export type {
+  NestedDocsPageTreePluginBadgeConfig,
+  NestedDocsPageTreePluginBadgeMap,
+  NestedDocsPageTreePluginBadgeStatus,
+  NestedDocsPageTreePluginConfig,
+} from './types.js'
+
+export const nestedDocsPageTreePlugin =
+  (pluginOptions: NestedDocsPageTreePluginConfig) =>
   (config: Config): Config => {
-    if (!config.collections) {
-      config.collections = []
+    if (!pluginOptions.collections?.length) {
+      throw new Error('plugin-nested-docs-page-tree requires at least one collection slug.')
     }
 
-    config.collections.push({
-      slug: 'plugin-collection',
-      fields: [
-        {
-          name: 'id',
-          type: 'text',
-        },
-      ],
-    })
-
-    if (pluginOptions.collections) {
-      for (const collectionSlug in pluginOptions.collections) {
-        const collection = config.collections.find(
-          (collection) => collection.slug === collectionSlug,
-        )
-
-        if (collection) {
-          collection.fields.push({
-            name: 'addedByPlugin',
-            type: 'text',
-            admin: {
-              position: 'sidebar',
-            },
-          })
-        }
-      }
-    }
-
-    /**
-     * If the plugin is disabled, we still want to keep added collections/fields so the database schema is consistent which is important for migrations.
-     * If your plugin heavily modifies the database schema, you may want to remove this property.
-     */
     if (pluginOptions.disabled) {
       return config
     }
 
-    if (!config.endpoints) {
-      config.endpoints = []
+    const breadcrumbsFieldSlug =
+      pluginOptions.breadcrumbsFieldSlug ?? DEFAULT_BREADCRUMBS_FIELD_SLUG
+    const defaultLimit = pluginOptions.defaultLimit ?? DEFAULT_LIMIT
+    const hideBreadcrumbs = pluginOptions.hideBreadcrumbs ?? true
+    const parentFieldSlug = pluginOptions.parentFieldSlug ?? DEFAULT_PARENT_FIELD_SLUG
+    const badges = normalizeNestedDocsPageTreePluginBadgeConfig(pluginOptions.badges)
+    const targetedCollectionSlugs = new Set<string>(pluginOptions.collections)
+
+    if (!config.collections?.length) {
+      throw new Error('plugin-nested-docs-page-tree could not find any collections to patch.')
     }
 
-    if (!config.admin) {
-      config.admin = {}
-    }
-
-    if (!config.admin.components) {
-      config.admin.components = {}
-    }
-
-    if (!config.admin.components.beforeDashboard) {
-      config.admin.components.beforeDashboard = []
-    }
-
-    config.admin.components.beforeDashboard.push(
-      `payload-page-tree/client#BeforeDashboardClient`,
-    )
-    config.admin.components.beforeDashboard.push(
-      `payload-page-tree/rsc#BeforeDashboardServer`,
-    )
-
-    config.endpoints.push({
-      handler: customEndpointHandler,
-      method: 'get',
-      path: '/my-plugin-endpoint',
-    })
-
-    const incomingOnInit = config.onInit
-
-    config.onInit = async (payload) => {
-      // Ensure we are executing any existing onInit functions before running our own.
-      if (incomingOnInit) {
-        await incomingOnInit(payload)
+    const foundCollectionSlugs = new Set<string>()
+    const nextCollections = config.collections.map((collection) => {
+      if (!targetedCollectionSlugs.has(collection.slug)) {
+        return collection
       }
 
-      const { totalDocs } = await payload.count({
-        collection: 'plugin-collection',
-        where: {
-          id: {
-            equals: 'seeded-by-plugin',
-          },
-        },
+      foundCollectionSlugs.add(collection.slug)
+      validateTargetCollection({
+        breadcrumbsFieldSlug,
+        collection,
+        parentFieldSlug,
       })
 
-      if (totalDocs === 0) {
-        await payload.create({
-          collection: 'plugin-collection',
-          data: {
-            id: 'seeded-by-plugin',
+      return {
+        ...collection,
+        admin: {
+          ...(collection.admin ?? {}),
+          components: {
+            ...(collection.admin?.components ?? {}),
+            views: {
+              ...(collection.admin?.components?.views ?? {}),
+              list: {
+                ...(collection.admin?.components?.views?.list ?? {}),
+                Component: PAGE_TREE_LIST_VIEW_PATH,
+              },
+            },
           },
-        })
+          pagination: {
+            ...(collection.admin?.pagination ?? {}),
+            defaultLimit:
+              collection.admin?.pagination?.defaultLimit === undefined
+                ? defaultLimit
+                : collection.admin.pagination.defaultLimit,
+          },
+        },
+        custom: {
+          ...(collection.custom ?? {}),
+          [nestedDocsPageTreePluginCustomKey]: buildCollectionCustom({
+            badges,
+            breadcrumbsFieldSlug,
+            defaultLimit,
+            hideBreadcrumbs,
+            parentFieldSlug,
+          }),
+        },
+        endpoints: [
+          ...getCollectionEndpoints(collection),
+          createMovePageEndpoint({
+            collectionSlug: collection.slug,
+            parentFieldSlug,
+          }),
+        ],
+        fields: collection.fields.map((field) =>
+          patchBreadcrumbField({
+            breadcrumbsFieldSlug,
+            field,
+            hideBreadcrumbs,
+          }),
+        ),
       }
+    })
+
+    const missingCollections = pluginOptions.collections.filter(
+      (collectionSlug) => !foundCollectionSlugs.has(collectionSlug),
+    )
+
+    if (missingCollections.length > 0) {
+      throw new Error(
+        `plugin-nested-docs-page-tree could not find the following collections: ${missingCollections.join(', ')}`,
+      )
     }
 
-    return config
+    return {
+      ...config,
+      collections: nextCollections as CollectionConfig[],
+    }
   }

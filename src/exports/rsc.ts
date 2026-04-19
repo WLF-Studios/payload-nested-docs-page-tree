@@ -1,1 +1,1 @@
-export { BeforeDashboardServer } from '../components/BeforeDashboardServer.js'
+export { NestedDocsPageTreeListView } from '../components/PageTreeListView.server.js'
