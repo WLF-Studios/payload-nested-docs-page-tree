@@ -55,6 +55,10 @@
   overflow-y: hidden;
 }
 
+.root :global(.pages-hierarchy-table[data-page-tree-orderable='true'] .cell-title) {
+  transform: translateX(-2.5rem);
+}
+
 .root :global(.pages-hierarchy-table .table tbody tr) {
   background: transparent;
   transition: background-color 0.16s ease;

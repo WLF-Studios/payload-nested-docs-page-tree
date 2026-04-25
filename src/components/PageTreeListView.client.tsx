@@ -9,7 +9,6 @@ import {
   DragOverlay,
   type DragStartEvent,
   PointerSensor,
-  useDraggable,
   useDroppable,
   useSensor,
   useSensors,
@@ -20,7 +19,6 @@ import {
   SelectAll,
   SelectRow,
   SortHeader,
-  SortRow,
   toast,
   useConfig,
   useLocale,
@@ -82,7 +80,7 @@ type PageTreeListViewClientProps = Omit<ListViewClientProps, 'columnState' | 'Ta
 
 type SelectableRowData = React.ComponentProps<typeof SelectRow>['rowData']
 type PageTreeDragData = {
-  dragType?: 'move' | 'order'
+  dragType?: 'move'
   rowID?: string
 }
 type ReorderDirection = 'greater' | 'less'
@@ -99,40 +97,6 @@ function getPageTreeDragData(value: unknown): PageTreeDragData {
 
 function getPayloadDocID(doc: PageTreeDoc): number | string | undefined {
   return typeof doc.id === 'number' || typeof doc.id === 'string' ? doc.id : undefined
-}
-
-function getPayloadDocIDString(doc: PageTreeDoc | undefined): string | undefined {
-  const id = doc ? getPayloadDocID(doc) : undefined
-
-  return id === undefined ? undefined : String(id)
-}
-
-function getOrderInsertIndexFromDropTarget(args: {
-  docs: PageTreeDoc[]
-  dropTarget?: PageTreeDropTarget
-  moveFromIndex: number
-}): null | number {
-  const { docs, dropTarget, moveFromIndex } = args
-
-  if (!dropTarget) {
-    return null
-  }
-
-  if (dropTarget.dropType === 'row') {
-    const targetIndex = docs.findIndex((doc) => doc.__pageTreeID === dropTarget.rowID)
-
-    return targetIndex >= 0 ? targetIndex : null
-  }
-
-  const insertIndex = Number.parseInt(dropTarget.dropID.split(':')[1] ?? '', 10)
-
-  if (Number.isNaN(insertIndex)) {
-    return null
-  }
-
-  const adjustedIndex = insertIndex > moveFromIndex ? insertIndex - 1 : insertIndex
-
-  return Math.min(Math.max(adjustedIndex, 0), Math.max(docs.length - 1, 0))
 }
 
 function getManualOrderDropValidation(args: {
@@ -241,10 +205,10 @@ function getReorderTargetFromPlacement(args: {
   docsByID: ReadonlyMap<string, PageTreeDoc>
   orderableFieldName: string
   placement: PageTreeOrderPlacement
-}): null | {
+}): {
   newKeyWillBe: ReorderDirection
   targetDoc: PageTreeDoc
-} {
+} | null {
   const { currentSort, docsByID, orderableFieldName, placement } = args
   const targetDocID = placement.previousSiblingID ?? placement.nextSiblingID
 
@@ -311,15 +275,17 @@ function normalizePositiveInt(value: null | string, fallback: number): number {
   return Number.isNaN(parsedValue) || parsedValue <= 0 ? fallback : parsedValue
 }
 
-function ensureUseAsTitleColumn(columnState: Column[], useAsTitle: string): Column[] {
-  return columnState.map((column) =>
-    column.accessor === useAsTitle
-      ? {
-          ...column,
-          active: true,
-        }
-      : column,
-  )
+function normalizePageTreeColumnState(columnState: Column[], useAsTitle: string): Column[] {
+  return columnState
+    .filter((column) => column.accessor !== '_dragHandle')
+    .map((column) =>
+      column.accessor === useAsTitle
+        ? {
+            ...column,
+            active: true,
+          }
+        : column,
+    )
 }
 
 function sliceColumnState(
@@ -398,34 +364,25 @@ function renderStatusBadge(args: {
   )
 }
 
-function PageTreeOrderCell({
-  children,
-  disabled,
-  rowID,
-}: {
-  children: React.ReactNode
-  disabled: boolean
-  rowID: string
-}) {
-  const { attributes, isDragging, listeners, setNodeRef } = useDraggable({
-    data: {
-      dragType: 'order',
-      rowID,
-    } satisfies PageTreeDragData,
-    disabled,
-    id: `page-order-drag:${rowID}`,
-  })
+function createManualOrderColumn(docs: PageTreeDoc[]): Column {
+  return {
+    accessor: '_dragHandle',
+    active: true,
+    field: { hidden: true } as Column['field'],
+    Heading: <SortHeader />,
+    renderedCells: docs.map(() => null),
+  }
+}
 
-  return (
-    <div
-      {...attributes}
-      {...listeners}
-      data-order-dragging={isDragging ? 'true' : 'false'}
-      ref={setNodeRef}
-    >
-      {children}
-    </div>
-  )
+function insertManualOrderColumn(columns: Column[], orderColumn: Column): Column[] {
+  const selectColumnIndex = columns.findIndex((column) => column.accessor === '_select')
+  const insertIndex = selectColumnIndex >= 0 ? selectColumnIndex + 1 : 0
+
+  return [
+    ...columns.slice(0, insertIndex),
+    orderColumn,
+    ...columns.slice(insertIndex),
+  ]
 }
 
 function buildTableColumns(args: {
@@ -433,7 +390,6 @@ function buildTableColumns(args: {
   columnState: Column[]
   docs: PageTreeDoc[]
   enableRowSelections?: boolean
-  orderDragIsDisabled: boolean
   orderableFieldName?: string
   parentFieldSlug: string
   t: (key: 'general:noValue' | 'version:changed' | 'version:draft' | 'version:published') => string
@@ -444,7 +400,6 @@ function buildTableColumns(args: {
     columnState,
     docs,
     enableRowSelections,
-    orderDragIsDisabled,
     orderableFieldName,
     parentFieldSlug,
     t,
@@ -508,21 +463,7 @@ function buildTableColumns(args: {
   }
 
   if (orderableFieldName && !columnsToUse.some((column) => column.accessor === '_dragHandle')) {
-    columnsToUse.unshift({
-      accessor: '_dragHandle',
-      active: true,
-      field: { hidden: true } as Column['field'],
-      Heading: <SortHeader />,
-      renderedCells: docs.map((doc, index) => (
-        <PageTreeOrderCell
-          disabled={orderDragIsDisabled}
-          key={doc.__pageTreeID ?? index}
-          rowID={doc.__pageTreeID}
-        >
-          <SortRow />
-        </PageTreeOrderCell>
-      )),
-    })
+    return insertManualOrderColumn(columnsToUse, createManualOrderColumn(docs))
   }
 
   return columnsToUse
@@ -627,6 +568,7 @@ function HierarchyTable({
   allowSameParentDrops,
   columns,
   data,
+  hasManualOrderColumn,
   isMovePending,
 }: {
   activeDragRowID: null | string
@@ -634,6 +576,7 @@ function HierarchyTable({
   allowSameParentDrops: boolean
   columns: Column[]
   data: PageTreeDoc[]
+  hasManualOrderColumn: boolean
   isMovePending: boolean
 }) {
   const activeColumns = React.useMemo(
@@ -690,6 +633,7 @@ function HierarchyTable({
       ]
         .filter(Boolean)
         .join(' ')}
+      data-page-tree-orderable={hasManualOrderColumn ? 'true' : undefined}
     >
       <div className="table table--appearance-default">
         <table cellPadding="0" cellSpacing="0">
@@ -768,7 +712,6 @@ export default function PageTreeListViewClient({
   const [collapsedIDs, setCollapsedIDs] = React.useState<Set<string>>(() => new Set())
   const [localSourceDocs, setLocalSourceDocs] = React.useState(sourceDocs)
   const [pendingMoveRowID, setPendingMoveRowID] = React.useState<null | string>(null)
-  const [pendingOrderRowID, setPendingOrderRowID] = React.useState<null | string>(null)
 
   React.useEffect(() => {
     setLocalSourceDocs(sourceDocs)
@@ -833,18 +776,10 @@ export default function PageTreeListViewClient({
       activeDragRowID,
       canMoveDocs,
       collapsedIDs,
-      disableMoveDrag: pendingOrderRowID !== null,
       pendingMoveRowID,
       toggleRow,
     }),
-    [
-      activeDragRowID,
-      canMoveDocs,
-      collapsedIDs,
-      pendingMoveRowID,
-      pendingOrderRowID,
-      toggleRow,
-    ],
+    [activeDragRowID, canMoveDocs, collapsedIDs, pendingMoveRowID, toggleRow],
   )
 
   React.useEffect(() => {
@@ -875,7 +810,7 @@ export default function PageTreeListViewClient({
     [allDocs],
   )
   const normalizedColumnState = React.useMemo(
-    () => ensureUseAsTitleColumn(columnState, useAsTitle),
+    () => normalizePageTreeColumnState(columnState, useAsTitle),
     [columnState, useAsTitle],
   )
   const paginatedColumnState = React.useMemo(
@@ -889,11 +824,6 @@ export default function PageTreeListViewClient({
         columnState: paginatedColumnState,
         docs: paginatedDocs,
         enableRowSelections: props.enableRowSelections,
-        orderDragIsDisabled:
-          !canMoveDocs ||
-          !orderableFieldName ||
-          pendingMoveRowID !== null ||
-          pendingOrderRowID !== null,
         orderableFieldName,
         parentFieldSlug,
         t: i18n.t,
@@ -905,9 +835,6 @@ export default function PageTreeListViewClient({
       badgeConfig,
       orderableFieldName,
       parentFieldSlug,
-      canMoveDocs,
-      pendingMoveRowID,
-      pendingOrderRowID,
       props.enableRowSelections,
       i18n.t,
       useAsTitle,
@@ -949,7 +876,7 @@ export default function PageTreeListViewClient({
       targetDoc: targetDoc ?? undefined,
     })
   }, [activeDragDoc, activeDropTarget, allDocsByID, manualOrderIsActive])
-  const isMovePending = pendingMoveRowID !== null || pendingOrderRowID !== null
+  const isMovePending = pendingMoveRowID !== null
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -1067,104 +994,6 @@ export default function PageTreeListViewClient({
       locale?.code,
       orderableFieldName,
       props.collectionSlug,
-    ],
-  )
-  const handleOrderDragEnd = React.useCallback(
-    async (event: DragEndEvent) => {
-      const dragData = getPageTreeDragData(event.active.data.current)
-      const rowID = dragData.rowID
-
-      if (!rowID || !orderableFieldName) {
-        return
-      }
-
-      if (currentSort !== orderableFieldName && currentSort !== `-${orderableFieldName}`) {
-        toast.warning('To reorder the rows you must first sort them by the "Order" column')
-        return
-      }
-
-      const movedDoc = paginatedDocsByID.get(rowID)
-      const moveFromIndex = paginatedDocs.findIndex((doc) => doc.__pageTreeID === rowID)
-      const dropTarget = event.over?.data.current as PageTreeDropTarget | undefined
-      const insertIndex = getOrderInsertIndexFromDropTarget({
-        docs: paginatedDocs,
-        dropTarget,
-        moveFromIndex,
-      })
-
-      if (!movedDoc || moveFromIndex < 0 || insertIndex === null) {
-        return
-      }
-
-      const movedDocID = getPayloadDocID(movedDoc)
-
-      if (movedDocID === undefined) {
-        return
-      }
-
-      const docsWithoutMoved = paginatedDocs.filter((doc) => doc.__pageTreeID !== rowID)
-      const newBeforeRow = docsWithoutMoved[insertIndex - 1]
-      const newAfterRow = docsWithoutMoved[insertIndex]
-      const currentBeforeID = getPayloadDocIDString(paginatedDocs[moveFromIndex - 1])
-      const currentAfterID = getPayloadDocIDString(paginatedDocs[moveFromIndex + 1])
-      const nextBeforeID = getPayloadDocIDString(newBeforeRow)
-      const nextAfterID = getPayloadDocIDString(newAfterRow)
-
-      if (currentBeforeID === nextBeforeID && currentAfterID === nextAfterID) {
-        return
-      }
-
-      const reorderTargetDoc = newBeforeRow ?? newAfterRow
-
-      if (!reorderTargetDoc) {
-        return
-      }
-
-      const newKeyWillBe =
-        (newBeforeRow && currentSort === orderableFieldName) ||
-        (!newBeforeRow && currentSort === `-${orderableFieldName}`)
-          ? 'greater'
-          : 'less'
-      setPendingOrderRowID(rowID)
-
-      try {
-        const nextOrderValue = await reorderDocument({
-          movedDocID,
-          newKeyWillBe,
-          targetDoc: reorderTargetDoc,
-        })
-
-        if (typeof nextOrderValue === 'string') {
-          setLocalSourceDocs((currentDocs) =>
-            currentDocs.map((doc) =>
-              String(doc.id ?? '') === String(movedDocID)
-                ? {
-                    ...doc,
-                    [orderableFieldName]: nextOrderValue,
-                  }
-                : doc,
-            ),
-          )
-        }
-
-        React.startTransition(() => {
-          router.refresh()
-        })
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-
-        toast.error(message)
-      } finally {
-        setPendingOrderRowID(null)
-      }
-    },
-    [
-      currentSort,
-      orderableFieldName,
-      paginatedDocs,
-      paginatedDocsByID,
-      reorderDocument,
-      router,
     ],
   )
   const handleManualOrderMoveEnd = React.useCallback(
@@ -1322,19 +1151,10 @@ export default function PageTreeListViewClient({
   const handleDragCancel = React.useCallback(() => {
     setActiveDragRowID(null)
     setActiveDropTarget(null)
-    setPendingOrderRowID(null)
   }, [])
   const handleDragStart = React.useCallback(
     (event: DragStartEvent) => {
       const dragData = getPageTreeDragData(event.active.data.current)
-
-      if (dragData.dragType === 'order') {
-        if (!canMoveDocs || !orderableFieldName || isMovePending) {
-          return
-        }
-
-        return
-      }
 
       if (!canMoveDocs || isMovePending) {
         return
@@ -1347,16 +1167,9 @@ export default function PageTreeListViewClient({
         setActiveDropTarget(null)
       }
     },
-    [canMoveDocs, isMovePending, orderableFieldName, paginatedDocsByID],
+    [canMoveDocs, isMovePending, paginatedDocsByID],
   )
   const handleDragOver = React.useCallback((event: DragOverEvent) => {
-    const dragData = getPageTreeDragData(event.active.data.current)
-
-    if (dragData.dragType === 'order') {
-      setActiveDropTarget(null)
-      return
-    }
-
     const overData = event.over?.data.current as PageTreeDropTarget | undefined
 
     if (!overData) {
@@ -1379,13 +1192,6 @@ export default function PageTreeListViewClient({
   const handleDragEnd = React.useCallback(
     async (event: DragEndEvent) => {
       const dragData = getPageTreeDragData(event.active.data.current)
-
-      if (dragData.dragType === 'order') {
-        setActiveDragRowID(null)
-        setActiveDropTarget(null)
-        await handleOrderDragEnd(event)
-        return
-      }
 
       const rowID = dragData.rowID
       const activeDoc = typeof rowID === 'string' ? paginatedDocsByID.get(rowID) ?? null : null
@@ -1452,7 +1258,6 @@ export default function PageTreeListViewClient({
     [
       allDocsByID,
       handleManualOrderMoveEnd,
-      handleOrderDragEnd,
       manualOrderIsActive,
       moveDocument,
       orderableFieldName,
@@ -1483,6 +1288,7 @@ export default function PageTreeListViewClient({
           allowSameParentDrops={manualOrderIsActive}
           columns={tableColumns}
           data={paginatedDocs}
+          hasManualOrderColumn={Boolean(orderableFieldName)}
           isMovePending={isMovePending}
         />
         <DragOverlay dropAnimation={null}>
@@ -1502,6 +1308,7 @@ export default function PageTreeListViewClient({
       isMovePending,
       allDocsByID,
       manualOrderIsActive,
+      orderableFieldName,
       paginatedDocs,
       sensors,
       tableColumns,
