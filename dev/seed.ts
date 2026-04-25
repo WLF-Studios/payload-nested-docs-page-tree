@@ -2,7 +2,9 @@ import type { Payload } from 'payload'
 
 import { devUser } from './helpers/credentials.js'
 
-type SeedCollection = 'categories' | 'pages'
+type PageSeedCollection = 'page-orderable' | 'page-tree' | 'page-tree-orderable' | 'pages'
+type SeedCollection = 'categories' | PageSeedCollection
+type NestedSeedCollection = 'categories' | 'page-tree' | 'page-tree-orderable'
 type SeedPageStatus = 'draft' | 'published'
 type SeedDefinition = {
   parentSlug?: string
@@ -23,62 +25,40 @@ const pageSeedDefinitions: SeedDefinition[] = [
   { parentSlug: 'about', slug: 'team', title: 'Team' },
   { parentSlug: 'team', slug: 'leadership', title: 'Leadership' },
   { parentSlug: 'about', slug: 'careers', title: 'Careers' },
-  { parentSlug: 'about', slug: 'culture', title: 'Culture' },
   { slug: 'services', title: 'Services' },
   { parentSlug: 'services', slug: 'strategy', title: 'Strategy' },
-  { parentSlug: 'strategy', slug: 'brand-strategy', title: 'Brand Strategy' },
-  { parentSlug: 'strategy', slug: 'product-strategy', title: 'Product Strategy' },
   { parentSlug: 'services', slug: 'design', title: 'Design' },
-  { parentSlug: 'design', slug: 'web-design', title: 'Web Design' },
-  { parentSlug: 'design', slug: 'ux-audits', status: 'draft', title: 'UX Audits' },
-  { parentSlug: 'services', slug: 'development', title: 'Development' },
-  {
-    parentSlug: 'development',
-    slug: 'frontend-engineering',
-    title: 'Frontend Engineering',
-  },
-  {
-    parentSlug: 'development',
-    slug: 'cms-integrations',
-    title: 'CMS Integrations',
-  },
-  { parentSlug: 'development', slug: 'ecommerce', title: 'Ecommerce' },
-  { slug: 'solutions', title: 'Solutions' },
-  { parentSlug: 'solutions', slug: 'startups', title: 'For Startups' },
-  { parentSlug: 'solutions', slug: 'enterprise', title: 'For Enterprise' },
-  { parentSlug: 'solutions', slug: 'healthcare', title: 'Healthcare' },
-  { slug: 'case-studies', title: 'Case Studies' },
-  {
-    parentSlug: 'case-studies',
-    slug: 'fintech-platform',
-    title: 'Fintech Platform',
-  },
-  {
-    parentSlug: 'case-studies',
-    slug: 'b2b-commerce',
-    title: 'B2B Commerce',
-  },
-  {
-    parentSlug: 'case-studies',
-    slug: 'patient-portal',
-    title: 'Patient Portal',
-  },
   { slug: 'blog', title: 'Blog' },
   { parentSlug: 'blog', slug: 'company-news', status: 'draft', title: 'Company News' },
   { parentSlug: 'blog', slug: 'engineering-notes', title: 'Engineering Notes' },
   { slug: 'contact', title: 'Contact' },
-  {
-    parentSlug: 'contact',
-    slug: 'request-a-quote',
-    status: 'draft',
-    title: 'Request a Quote',
-  },
+  { slug: 'pricing', title: 'Pricing' },
+  { slug: 'legal', title: 'Legal' },
 ]
 
 const categorySeedDefinitions: SeedDefinition[] = [
-  { slug: 'news', title: 'News' },
-  { parentSlug: 'news', slug: 'updates', title: 'Updates' },
+  { slug: 'documentation', title: 'Documentation' },
+  { parentSlug: 'documentation', slug: 'getting-started', title: 'Getting Started' },
+  { parentSlug: 'documentation', slug: 'how-to-guides', title: 'How-To Guides' },
+  { slug: 'product', title: 'Product' },
+  { parentSlug: 'product', slug: 'features', title: 'Features' },
+  { parentSlug: 'features', slug: 'automation', title: 'Automation' },
+  { parentSlug: 'features', slug: 'localization', title: 'Localization' },
+  { slug: 'engineering', title: 'Engineering' },
+  { parentSlug: 'engineering', slug: 'architecture', title: 'Architecture' },
+  { parentSlug: 'engineering', slug: 'integrations', title: 'Integrations' },
+  { parentSlug: 'integrations', slug: 'cms', title: 'CMS' },
+  { parentSlug: 'integrations', slug: 'search', title: 'Search' },
 ]
+
+function isPageSeedCollection(collection: SeedCollection): collection is PageSeedCollection {
+  return (
+    collection === 'page-orderable' ||
+    collection === 'page-tree' ||
+    collection === 'page-tree-orderable' ||
+    collection === 'pages'
+  )
+}
 
 async function upsertPublishedDocument(args: {
   collection: SeedCollection
@@ -90,13 +70,13 @@ async function upsertPublishedDocument(args: {
 }) {
   const { collection, data, locale, payload, slug, status = 'published' } = args
   const statusAwareData =
-    collection === 'pages'
+    isPageSeedCollection(collection)
       ? {
           ...data,
           _status: status,
         }
       : data
-  const shouldSaveAsDraft = collection === 'pages' && status === 'draft'
+  const shouldSaveAsDraft = isPageSeedCollection(collection) && status === 'draft'
   const { docs } = await payload.find({
     collection,
     depth: 0,
@@ -113,7 +93,7 @@ async function upsertPublishedDocument(args: {
   } as never)
   const existingDoc = docs[0] as { id: number | string } | undefined
   const currentPublishedDoc =
-    collection === 'pages' && status === 'draft'
+    isPageSeedCollection(collection) && status === 'draft'
       ? ((await payload.find({
           collection,
           depth: 0,
@@ -167,7 +147,7 @@ async function upsertPublishedDocument(args: {
 }
 
 async function seedTree(args: {
-  collection: SeedCollection
+  collection: NestedSeedCollection
   definitions: SeedDefinition[]
   locale?: string
   payload: Payload
@@ -189,7 +169,7 @@ async function seedTree(args: {
       collection,
       data: {
         parent: parentID,
-        ...(collection === 'pages'
+        ...(isPageSeedCollection(collection)
           ? {
               publishedAt:
                 definition.status === 'draft' ? null : buildSeedPublishedAt(index),
@@ -210,13 +190,48 @@ async function seedTree(args: {
   return seededIDsBySlug
 }
 
+async function seedFlatCollection(args: {
+  collection: Exclude<SeedCollection, NestedSeedCollection>
+  definitions: SeedDefinition[]
+  locale?: string
+  payload: Payload
+}) {
+  const { collection, definitions, locale, payload } = args
+  const seededIDsBySlug = new Map<string, number | string>()
+
+  for (const definition of definitions) {
+    const document = (await upsertPublishedDocument({
+      collection,
+      data: {
+        ...(isPageSeedCollection(collection)
+          ? {
+              publishedAt:
+                definition.status === 'draft' ? null : buildSeedPublishedAt(seededIDsBySlug.size),
+            }
+          : {}),
+        slug: definition.slug,
+        title: definition.title,
+      },
+      locale,
+      payload,
+      slug: definition.slug,
+      status: definition.status,
+    })) as { id: number | string }
+
+    seededIDsBySlug.set(definition.slug, document.id)
+  }
+
+  return seededIDsBySlug
+}
+
 async function publishLocalizedPageTitles(args: {
+  collection: PageSeedCollection
   definitions: SeedDefinition[]
   locale: string
   pagesBySlug: Map<string, number | string>
   payload: Payload
 }) {
-  const { definitions, locale, pagesBySlug, payload } = args
+  const { collection, definitions, locale, pagesBySlug, payload } = args
 
   const localizedDefinitions = definitions.map((definition, index) => [index, definition] as const)
 
@@ -228,7 +243,7 @@ async function publishLocalizedPageTitles(args: {
     }
 
     await payload.update({
-      collection: 'pages',
+      collection,
       data: {
         _status: definition.status ?? 'published',
         publishedAt: definition.status === 'draft' ? null : buildSeedPublishedAt(index),
@@ -260,13 +275,56 @@ export const seed = async (payload: Payload) => {
     } as never)
   }
 
-  const pagesBySlug = await seedTree({
+  const pageTreeOrderableBySlug = await seedTree({
+    collection: 'page-tree-orderable',
+    definitions: pageSeedDefinitions,
+    payload,
+  })
+
+  await publishLocalizedPageTitles({
+    collection: 'page-tree-orderable',
+    definitions: pageSeedDefinitions,
+    locale: 'de',
+    pagesBySlug: pageTreeOrderableBySlug,
+    payload,
+  })
+
+  const pageTreeBySlug = await seedTree({
+    collection: 'page-tree',
+    definitions: pageSeedDefinitions,
+    payload,
+  })
+
+  await publishLocalizedPageTitles({
+    collection: 'page-tree',
+    definitions: pageSeedDefinitions,
+    locale: 'de',
+    pagesBySlug: pageTreeBySlug,
+    payload,
+  })
+
+  const pageOrderableBySlug = await seedFlatCollection({
+    collection: 'page-orderable',
+    definitions: pageSeedDefinitions,
+    payload,
+  })
+
+  await publishLocalizedPageTitles({
+    collection: 'page-orderable',
+    definitions: pageSeedDefinitions,
+    locale: 'de',
+    pagesBySlug: pageOrderableBySlug,
+    payload,
+  })
+
+  const pagesBySlug = await seedFlatCollection({
     collection: 'pages',
     definitions: pageSeedDefinitions,
     payload,
   })
 
   await publishLocalizedPageTitles({
+    collection: 'pages',
     definitions: pageSeedDefinitions,
     locale: 'de',
     pagesBySlug,

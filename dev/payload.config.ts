@@ -24,8 +24,13 @@ const Users: CollectionConfig = {
   fields: [],
 }
 
-const Pages: CollectionConfig = {
-  slug: 'pages',
+const buildPageLikeCollection = (args: {
+  orderable?: boolean
+  showParentColumn?: boolean
+  slug: string
+}): CollectionConfig => ({
+  slug: args.slug,
+  ...(args.orderable ? { orderable: true } : {}),
   access: {
     create: ({ req }) => Boolean(req.user),
     delete: ({ req }) => Boolean(req.user),
@@ -33,7 +38,9 @@ const Pages: CollectionConfig = {
     update: ({ req }) => Boolean(req.user),
   },
   admin: {
-    defaultColumns: ['title', 'publishedAt', 'updatedAt', 'parent', 'slug', '_status'],
+    defaultColumns: args.showParentColumn
+      ? ['title', 'publishedAt', 'updatedAt', 'parent', 'slug', '_status']
+      : ['title', 'publishedAt', 'updatedAt', 'slug', '_status'],
     pagination: {
       defaultLimit: 100,
     },
@@ -68,10 +75,31 @@ const Pages: CollectionConfig = {
     },
     maxPerDoc: 20,
   },
-}
+})
+
+const PageTreeOrderable = buildPageLikeCollection({
+  orderable: true,
+  showParentColumn: true,
+  slug: 'page-tree-orderable',
+})
+
+const PageTree = buildPageLikeCollection({
+  showParentColumn: true,
+  slug: 'page-tree',
+})
+
+const PageOrderable = buildPageLikeCollection({
+  orderable: true,
+  slug: 'page-orderable',
+})
+
+const Pages = buildPageLikeCollection({
+  slug: 'pages',
+})
 
 const Categories: CollectionConfig = {
   slug: 'categories',
+  orderable: true,
   access: {
     create: ({ req }) => Boolean(req.user),
     delete: ({ req }) => Boolean(req.user),
@@ -119,7 +147,7 @@ const buildConfigWithMemoryDB = async () => {
       },
       user: Users.slug,
     },
-    collections: [Users, Pages, Categories],
+    collections: [Users, PageTreeOrderable, PageTree, PageOrderable, Pages, Categories],
     db: mongooseAdapter({
       ensureIndexes: true,
       url: process.env.DATABASE_URL || '',
@@ -136,7 +164,7 @@ const buildConfigWithMemoryDB = async () => {
     },
     plugins: [
       nestedDocsPlugin({
-        collections: ['pages', 'categories'],
+        collections: ['page-tree-orderable', 'page-tree', 'categories'],
         generateLabel: (_, doc) => {
           if (typeof doc.title === 'string' && doc.title.trim()) {
             return doc.title
@@ -151,7 +179,7 @@ const buildConfigWithMemoryDB = async () => {
         generateURL: (docs) => buildNestedDocURL(docs),
       }),
       nestedDocsPageTreePlugin({
-        collections: ['pages', 'categories'],
+        collections: ['page-tree-orderable', 'page-tree', 'categories'],
       }),
     ],
     secret: process.env.PAYLOAD_SECRET || 'test-secret_key',

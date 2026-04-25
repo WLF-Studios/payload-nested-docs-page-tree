@@ -68,6 +68,9 @@ export interface Config {
   blocks: {};
   collections: {
     users: User;
+    'page-tree-orderable': PageTreeOrderable;
+    'page-tree': PageTree;
+    'page-orderable': PageOrderable;
     pages: Page;
     categories: Category;
     'payload-kv': PayloadKv;
@@ -78,6 +81,9 @@ export interface Config {
   collectionsJoins: {};
   collectionsSelect: {
     users: UsersSelect<false> | UsersSelect<true>;
+    'page-tree-orderable': PageTreeOrderableSelect<false> | PageTreeOrderableSelect<true>;
+    'page-tree': PageTreeSelect<false> | PageTreeSelect<true>;
+    'page-orderable': PageOrderableSelect<false> | PageOrderableSelect<true>;
     pages: PagesSelect<false> | PagesSelect<true>;
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
@@ -146,10 +152,11 @@ export interface User {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "pages".
+ * via the `definition` "page-tree-orderable".
  */
-export interface Page {
+export interface PageTreeOrderable {
   id: string;
+  _order?: string | null;
   title: string;
   publishedAt?: string | null;
   /**
@@ -157,10 +164,10 @@ export interface Page {
    */
   generateSlug?: boolean | null;
   slug: string;
-  parent?: (string | null) | Page;
+  parent?: (string | null) | PageTreeOrderable;
   breadcrumbs?:
     | {
-        doc?: (string | null) | Page;
+        doc?: (string | null) | PageTreeOrderable;
         url?: string | null;
         label?: string | null;
         id?: string | null;
@@ -172,10 +179,72 @@ export interface Page {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "page-tree".
+ */
+export interface PageTree {
+  id: string;
+  title: string;
+  publishedAt?: string | null;
+  /**
+   * When enabled, the slug will auto-generate from the title field on save and autosave.
+   */
+  generateSlug?: boolean | null;
+  slug: string;
+  parent?: (string | null) | PageTree;
+  breadcrumbs?:
+    | {
+        doc?: (string | null) | PageTree;
+        url?: string | null;
+        label?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  updatedAt: string;
+  createdAt: string;
+  _status?: ('draft' | 'published') | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "page-orderable".
+ */
+export interface PageOrderable {
+  id: string;
+  _order?: string | null;
+  title: string;
+  publishedAt?: string | null;
+  /**
+   * When enabled, the slug will auto-generate from the title field on save and autosave.
+   */
+  generateSlug?: boolean | null;
+  slug: string;
+  updatedAt: string;
+  createdAt: string;
+  _status?: ('draft' | 'published') | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "pages".
+ */
+export interface Page {
+  id: string;
+  title: string;
+  publishedAt?: string | null;
+  /**
+   * When enabled, the slug will auto-generate from the title field on save and autosave.
+   */
+  generateSlug?: boolean | null;
+  slug: string;
+  updatedAt: string;
+  createdAt: string;
+  _status?: ('draft' | 'published') | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "categories".
  */
 export interface Category {
   id: string;
+  _order?: string | null;
   title: string;
   /**
    * When enabled, the slug will auto-generate from the title field on save and autosave.
@@ -221,6 +290,18 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'users';
         value: string | User;
+      } | null)
+    | ({
+        relationTo: 'page-tree-orderable';
+        value: string | PageTreeOrderable;
+      } | null)
+    | ({
+        relationTo: 'page-tree';
+        value: string | PageTree;
+      } | null)
+    | ({
+        relationTo: 'page-orderable';
+        value: string | PageOrderable;
       } | null)
     | ({
         relationTo: 'pages';
@@ -296,9 +377,10 @@ export interface UsersSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "pages_select".
+ * via the `definition` "page-tree-orderable_select".
  */
-export interface PagesSelect<T extends boolean = true> {
+export interface PageTreeOrderableSelect<T extends boolean = true> {
+  _order?: T;
   title?: T;
   publishedAt?: T;
   generateSlug?: T;
@@ -318,9 +400,59 @@ export interface PagesSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "page-tree_select".
+ */
+export interface PageTreeSelect<T extends boolean = true> {
+  title?: T;
+  publishedAt?: T;
+  generateSlug?: T;
+  slug?: T;
+  parent?: T;
+  breadcrumbs?:
+    | T
+    | {
+        doc?: T;
+        url?: T;
+        label?: T;
+        id?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+  _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "page-orderable_select".
+ */
+export interface PageOrderableSelect<T extends boolean = true> {
+  _order?: T;
+  title?: T;
+  publishedAt?: T;
+  generateSlug?: T;
+  slug?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "pages_select".
+ */
+export interface PagesSelect<T extends boolean = true> {
+  title?: T;
+  publishedAt?: T;
+  generateSlug?: T;
+  slug?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "categories_select".
  */
 export interface CategoriesSelect<T extends boolean = true> {
+  _order?: T;
   title?: T;
   generateSlug?: T;
   slug?: T;

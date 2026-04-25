@@ -7,23 +7,41 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 import { devUser } from './helpers/credentials.js'
 import { getRelationshipID } from '../src/utilities/pageTree.js'
 
+const pageTreeListViewPath = 'plugin-nested-docs-page-tree/rsc#NestedDocsPageTreeListView'
+const pageSlugs = [
+  'about',
+  'blog',
+  'careers',
+  'company-news',
+  'contact',
+  'design',
+  'engineering-notes',
+  'home',
+  'leadership',
+  'legal',
+  'pricing',
+  'services',
+  'strategy',
+  'team',
+]
+
 let payload: Payload
 
 afterAll(async () => {
-  await payload.destroy()
+  await payload?.destroy()
 })
 
 beforeAll(async () => {
   payload = await getPayload({ config })
 })
 
-async function getPagesMoveEndpoint() {
-  const moveEndpoint = payload.collections.pages.config.endpoints?.find(
+async function getPageTreeMoveEndpoint() {
+  const moveEndpoint = payload.collections['page-tree'].config.endpoints?.find(
     (endpoint) => endpoint.path === '/:id/move' && endpoint.method === 'post',
   )
 
   if (!moveEndpoint) {
-    throw new Error('Could not resolve the pages move endpoint')
+    throw new Error('Could not resolve the page-tree move endpoint')
   }
 
   return moveEndpoint
@@ -49,7 +67,7 @@ async function getSeedUser() {
   return docs[0]
 }
 
-async function createPage(args: {
+async function createPageTreeDoc(args: {
   locale?: string
   parent?: null | string
   slug: string
@@ -58,7 +76,7 @@ async function createPage(args: {
   const { locale, parent = null, slug, title } = args
 
   return payload.create({
-    collection: 'pages',
+    collection: 'page-tree',
     data: {
       parent,
       slug,
@@ -70,9 +88,9 @@ async function createPage(args: {
   })
 }
 
-async function readPage(id: number | string, locale: string) {
+async function readPageTreeDoc(id: number | string, locale: string) {
   return payload.findByID({
-    collection: 'pages',
+    collection: 'page-tree',
     depth: 0,
     draft: true,
     id,
@@ -88,9 +106,9 @@ async function invokeMove(args: {
   user?: Record<string, unknown>
 }) {
   const { locale, movedID, parentID, user } = args
-  const moveEndpoint = await getPagesMoveEndpoint()
+  const moveEndpoint = await getPageTreeMoveEndpoint()
   const request = new Request(
-    `http://localhost:3000/api/pages/${movedID}/move${locale ? `?locale=${locale}` : ''}`,
+    `http://localhost:3000/api/page-tree/${movedID}/move${locale ? `?locale=${locale}` : ''}`,
     {
       body: JSON.stringify({ parentID }),
       headers: {
@@ -115,53 +133,177 @@ async function invokeMove(args: {
   return moveEndpoint.handler(payloadRequest)
 }
 
+function expectPageTreeCollection(
+  collection: Payload['collections'][string]['config'],
+  options: { orderable: boolean },
+) {
+  expect(collection.admin.components?.views?.list?.Component).toBe(pageTreeListViewPath)
+  expect(collection.orderable === true).toBe(options.orderable)
+  expect(collection.custom?.nestedDocsPageTreePlugin).toMatchObject({
+    badges: {
+      colors: {},
+      labels: {},
+    },
+    breadcrumbsFieldSlug: 'breadcrumbs',
+    defaultLimit: 100,
+    hideBreadcrumbs: true,
+    parentFieldSlug: 'parent',
+  })
+}
+
+function expectDefaultListCollection(
+  collection: Payload['collections'][string]['config'],
+  options: { orderable: boolean },
+) {
+  expect(collection.admin.components?.views?.list?.Component).toBeUndefined()
+  expect(collection.orderable === true).toBe(options.orderable)
+  expect(collection.custom?.nestedDocsPageTreePlugin).toBeUndefined()
+}
+
+function expectMoveEndpoint(collection: Payload['collections'][string]['config']) {
+  expect(
+    collection.endpoints?.some(
+      (endpoint) => endpoint.method === 'post' && endpoint.path === '/:id/move',
+    ),
+  ).toBe(true)
+}
+
 describe('nestedDocsPageTreePlugin integration', () => {
-  test('patches each targeted collection with the tree list view and move endpoint', async () => {
+  test('patches the testing admin collection matrix', async () => {
+    const pageTreeOrderableCollection = payload.collections['page-tree-orderable'].config
+    const pageTreeCollection = payload.collections['page-tree'].config
+    const pageOrderableCollection = payload.collections['page-orderable'].config
     const pagesCollection = payload.collections.pages.config
     const categoriesCollection = payload.collections.categories.config
 
-    expect(pagesCollection.admin.components?.views?.list?.Component).toBe(
-      'plugin-nested-docs-page-tree/rsc#NestedDocsPageTreeListView',
-    )
-    expect(categoriesCollection.admin.components?.views?.list?.Component).toBe(
-      'plugin-nested-docs-page-tree/rsc#NestedDocsPageTreeListView',
-    )
-    expect(pagesCollection.custom?.nestedDocsPageTreePlugin).toMatchObject({
-      badges: {
-        colors: {},
-        labels: {},
-      },
-      breadcrumbsFieldSlug: 'breadcrumbs',
-      defaultLimit: 100,
-      hideBreadcrumbs: true,
-      parentFieldSlug: 'parent',
-    })
-    expect(
-      pagesCollection.endpoints?.some(
-        (endpoint) => endpoint.method === 'post' && endpoint.path === '/:id/move',
-      ),
-    ).toBe(true)
+    expectPageTreeCollection(pageTreeOrderableCollection, { orderable: true })
+    expectPageTreeCollection(pageTreeCollection, { orderable: false })
+    expectDefaultListCollection(pageOrderableCollection, { orderable: true })
+    expectDefaultListCollection(pagesCollection, { orderable: false })
+    expectPageTreeCollection(categoriesCollection, { orderable: true })
 
-    const breadcrumbsField = pagesCollection.fields.find(
+    expectMoveEndpoint(pageTreeOrderableCollection)
+    expectMoveEndpoint(pageTreeCollection)
+
+    const breadcrumbsField = pageTreeCollection.fields.find(
+      (field) => 'name' in field && field.name === 'breadcrumbs',
+    )
+    const orderableBreadcrumbsField = pageTreeOrderableCollection.fields.find(
       (field) => 'name' in field && field.name === 'breadcrumbs',
     )
 
     expect(
       breadcrumbsField && 'admin' in breadcrumbsField ? breadcrumbsField.admin?.hidden : undefined,
     ).toBe(true)
+    expect(
+      orderableBreadcrumbsField && 'admin' in orderableBreadcrumbsField
+        ? orderableBreadcrumbsField.admin?.hidden
+        : undefined,
+    ).toBe(true)
+  })
+
+  test('seeds matching page fixtures and 12 nested categories', async () => {
+    const pageTreeOrderableResult = await payload.find({
+      collection: 'page-tree-orderable',
+      depth: 0,
+      draft: true,
+      limit: 100,
+      overrideAccess: true,
+      pagination: false,
+    })
+    const pageTreeResult = await payload.find({
+      collection: 'page-tree',
+      depth: 0,
+      draft: true,
+      limit: 100,
+      overrideAccess: true,
+      pagination: false,
+    })
+    const pageOrderableResult = await payload.find({
+      collection: 'page-orderable',
+      depth: 0,
+      draft: true,
+      limit: 100,
+      overrideAccess: true,
+      pagination: false,
+    })
+    const pagesResult = await payload.find({
+      collection: 'pages',
+      depth: 0,
+      draft: true,
+      limit: 100,
+      overrideAccess: true,
+      pagination: false,
+    })
+    const categoriesResult = await payload.find({
+      collection: 'categories',
+      depth: 0,
+      limit: 100,
+      overrideAccess: true,
+      pagination: false,
+    })
+
+    for (const result of [
+      pageTreeOrderableResult,
+      pageTreeResult,
+      pageOrderableResult,
+      pagesResult,
+    ]) {
+      expect(result.docs).toHaveLength(pageSlugs.length)
+      expect(result.docs.map((doc) => doc.slug).sort()).toEqual(pageSlugs)
+    }
+
+    const pageTreeOrderableBySlug = new Map(
+      pageTreeOrderableResult.docs.map((doc) => [doc.slug, doc] as const),
+    )
+    const pageTreeBySlug = new Map(pageTreeResult.docs.map((doc) => [doc.slug, doc] as const))
+
+    for (const pagesBySlug of [pageTreeOrderableBySlug, pageTreeBySlug]) {
+      expect(getRelationshipID(pagesBySlug.get('team')?.parent)).toBe(
+        String(pagesBySlug.get('about')?.id),
+      )
+      expect(getRelationshipID(pagesBySlug.get('leadership')?.parent)).toBe(
+        String(pagesBySlug.get('team')?.id),
+      )
+      expect(getRelationshipID(pagesBySlug.get('strategy')?.parent)).toBe(
+        String(pagesBySlug.get('services')?.id),
+      )
+      expect(getRelationshipID(pagesBySlug.get('company-news')?.parent)).toBe(
+        String(pagesBySlug.get('blog')?.id),
+      )
+    }
+
+    expect(pageOrderableResult.docs.every((doc) => !('parent' in doc))).toBe(true)
+    expect(pagesResult.docs.every((doc) => !('parent' in doc))).toBe(true)
+
+    expect(categoriesResult.docs).toHaveLength(12)
+
+    const categoriesBySlug = new Map(
+      categoriesResult.docs.map((doc) => [doc.slug, doc] as const),
+    )
+
+    expect(
+      getRelationshipID(categoriesBySlug.get('getting-started')?.parent),
+    ).toBe(String(categoriesBySlug.get('documentation')?.id))
+    expect(getRelationshipID(categoriesBySlug.get('automation')?.parent)).toBe(
+      String(categoriesBySlug.get('features')?.id),
+    )
+    expect(getRelationshipID(categoriesBySlug.get('cms')?.parent)).toBe(
+      String(categoriesBySlug.get('integrations')?.id),
+    )
   })
 
   test('rejects moves when the request does not have update access', async () => {
-    const root = await createPage({
+    const root = await createPageTreeDoc({
       slug: 'access-root',
       title: 'Access Root',
     })
-    const child = await createPage({
+    const child = await createPageTreeDoc({
       parent: String(root.id),
       slug: 'access-child',
       title: 'Access Child',
     })
-    const otherRoot = await createPage({
+    const otherRoot = await createPageTreeDoc({
       slug: 'access-other',
       title: 'Access Other',
     })
@@ -176,22 +318,22 @@ describe('nestedDocsPageTreePlugin integration', () => {
 
   test('moves only the active locale draft state and does not fan out localized breadcrumbs', async () => {
     const user = await getSeedUser()
-    const about = await createPage({
+    const about = await createPageTreeDoc({
       slug: 'locale-about',
       title: 'About Locale',
     })
-    const contact = await createPage({
+    const contact = await createPageTreeDoc({
       slug: 'locale-contact',
       title: 'Contact Locale',
     })
-    const team = await createPage({
+    const team = await createPageTreeDoc({
       parent: String(about.id),
       slug: 'locale-team',
       title: 'Team Locale',
     })
 
     await payload.update({
-      collection: 'pages',
+      collection: 'page-tree',
       data: {
         title: 'Ueber Lokal',
       },
@@ -201,7 +343,7 @@ describe('nestedDocsPageTreePlugin integration', () => {
       overrideAccess: true,
     })
     await payload.update({
-      collection: 'pages',
+      collection: 'page-tree',
       data: {
         title: 'Team Lokal',
       },
@@ -211,7 +353,7 @@ describe('nestedDocsPageTreePlugin integration', () => {
       overrideAccess: true,
     })
 
-    const teamDeBeforeMove = await readPage(team.id, 'de')
+    const teamDeBeforeMove = await readPageTreeDoc(team.id, 'de')
     const teamDeBeforeBreadcrumbLabels = teamDeBeforeMove.breadcrumbs?.map((crumb) => crumb.label)
 
     const response = await invokeMove({
@@ -223,8 +365,8 @@ describe('nestedDocsPageTreePlugin integration', () => {
 
     expect(response.status).toBe(200)
 
-    const teamEn = await readPage(team.id, 'en')
-    const teamDe = await readPage(team.id, 'de')
+    const teamEn = await readPageTreeDoc(team.id, 'en')
+    const teamDe = await readPageTreeDoc(team.id, 'de')
 
     expect(getRelationshipID(teamEn.parent)).toBe(String(contact.id))
     expect(getRelationshipID(teamDe.parent)).toBe(String(contact.id))
@@ -234,16 +376,16 @@ describe('nestedDocsPageTreePlugin integration', () => {
 
   test('rejects self, descendant, missing-parent, and no-op moves', async () => {
     const user = await getSeedUser()
-    const root = await createPage({
+    const root = await createPageTreeDoc({
       slug: 'rule-root',
       title: 'Rule Root',
     })
-    const child = await createPage({
+    const child = await createPageTreeDoc({
       parent: String(root.id),
       slug: 'rule-child',
       title: 'Rule Child',
     })
-    const grandchild = await createPage({
+    const grandchild = await createPageTreeDoc({
       parent: String(child.id),
       slug: 'rule-grandchild',
       title: 'Rule Grandchild',
