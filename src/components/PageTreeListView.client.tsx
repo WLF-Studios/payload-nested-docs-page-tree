@@ -1318,7 +1318,7 @@ export default function PageTreeListViewClient({
           isMovePending={isMovePending}
           titleCellAccessor={useAsTitle}
         />
-        <DragOverlay dropAnimation={null}>
+        <DragOverlay dropAnimation={null} style={{ cursor: 'grabbing' }}>
           {activeDragPreviewPath ? (
             <div className="pages-hierarchy-drag-overlay">{activeDragPreviewPath}</div>
           ) : null}

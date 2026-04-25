@@ -228,6 +228,7 @@
 }
 
 .root :global(.pages-hierarchy-cell__drag-handle) {
+  cursor: grab;
   margin-inline-end: 3px;
   touch-action: none;
 }
@@ -239,6 +240,11 @@
 
 .root :global(.pages-hierarchy-cell__drag-handle--active) {
   color: var(--theme-text);
+}
+
+.root :global(.pages-hierarchy-cell__drag-handle:active:not(:disabled)),
+.root :global(.pages-hierarchy-cell__drag-handle--active:not(:disabled)) {
+  cursor: grabbing;
 }
 
 .root :global(.pages-hierarchy-cell__drag-handle svg) {
@@ -285,9 +291,10 @@
   font-size: 0.95rem;
   font-weight: 500;
   inline-size: max-content;
-  margin-inline-start: 1rem;
+  margin-inline-start: 2rem;
   padding: 0.65rem 0.85rem;
   pointer-events: none;
+  transform: translateY(calc(0.75rem - 50%));
   white-space: nowrap;
 }
 
