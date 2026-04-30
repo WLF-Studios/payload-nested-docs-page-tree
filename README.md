@@ -173,7 +173,7 @@ export const triggerDeployOnPublishedChange: CollectionAfterChangeHook = async (
 }
 ```
 
-See `dev/lib/rebuild.ts` for the full reference example.
+See [`dev/lib/rebuild.ts`](https://github.com/WLF-Studios/payload-nested-docs-page-tree/blob/main/dev/lib/rebuild.ts) for the full reference example.
 
 ## Configuration
 
