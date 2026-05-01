@@ -2,20 +2,48 @@ import type { Payload, PayloadRequest } from 'payload'
 
 import config from '@payload-config'
 import { createPayloadRequest, getPayload } from 'payload'
-import { afterAll, beforeAll, describe, expect, test } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { devUser } from './helpers/credentials.js'
+import { revalidatePublishedChange } from './lib/rebuild.js'
 import { getRelationshipID } from '../src/utilities/pageTree.js'
 
 let payload: Payload
+const originalDeployHookURL = process.env.CLOUDFLARE_DEPLOY_HOOK_URL
 
 afterAll(async () => {
   await payload.destroy()
 })
 
+beforeEach(() => {
+  delete process.env.CLOUDFLARE_DEPLOY_HOOK_URL
+  vi.unstubAllGlobals()
+})
+
 beforeAll(async () => {
   payload = await getPayload({ config })
 })
+
+afterEach(() => {
+  if (originalDeployHookURL === undefined) {
+    delete process.env.CLOUDFLARE_DEPLOY_HOOK_URL
+  } else {
+    process.env.CLOUDFLARE_DEPLOY_HOOK_URL = originalDeployHookURL
+  }
+
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
+
+function mockDeployHookFetch() {
+  process.env.CLOUDFLARE_DEPLOY_HOOK_URL = 'https://example.com/deploy'
+
+  const fetchMock = vi.fn(async () => new Response(null, { status: 204 }))
+
+  vi.stubGlobal('fetch', fetchMock)
+
+  return fetchMock
+}
 
 async function getPagesMoveEndpoint() {
   const moveEndpoint = payload.collections.pages.config.endpoints?.find(
@@ -66,6 +94,27 @@ async function createPage(args: {
     },
     draft: true,
     locale,
+    overrideAccess: true,
+  })
+}
+
+async function createPublishedPage(args: {
+  parent?: null | string
+  slug: string
+  title: string
+}) {
+  const { parent = null, slug, title } = args
+
+  return payload.create({
+    collection: 'pages',
+    data: {
+      _status: 'published',
+      parent,
+      publishedAt: new Date().toISOString(),
+      slug,
+      title,
+    },
+    draft: false,
     overrideAccess: true,
   })
 }
@@ -122,6 +171,14 @@ describe('nestedDocsPageTreePlugin integration', () => {
     expect(pagesCollection.admin.components?.views?.list?.Component).toBe(
       'payload-nested-docs-page-tree/rsc#NestedDocsPageTreeListView',
     )
+    expect(payload.config.admin.components?.actions).toContain(
+      'payload-cloudflare-build-status/client#CloudflareBuildStatus',
+    )
+    expect(
+      payload.config.endpoints?.some(
+        (endpoint) => endpoint.method === 'get' && endpoint.path === '/cloudflare-build-status',
+      ),
+    ).toBe(true)
     expect(pagesCollection.orderable).toBe(true)
     expect(pagesCollection.custom?.nestedDocsPageTreePlugin).toMatchObject({
       badges: {
@@ -146,6 +203,116 @@ describe('nestedDocsPageTreePlugin integration', () => {
     expect(
       breadcrumbsField && 'admin' in breadcrumbsField ? breadcrumbsField.admin?.hidden : undefined,
     ).toBe(true)
+  })
+
+  test('triggers the Cloudflare deploy hook for published create and update', async () => {
+    const fetchMock = mockDeployHookFetch()
+
+    const page = await createPublishedPage({
+      slug: 'deploy-create',
+      title: 'Deploy Create',
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://example.com/deploy',
+      expect.objectContaining({
+        body: JSON.stringify({ source: 'pages' }),
+        method: 'POST',
+      }),
+    )
+
+    await payload.update({
+      collection: 'pages',
+      data: {
+        _status: 'published',
+        title: 'Deploy Update',
+      },
+      draft: false,
+      id: page.id,
+      overrideAccess: true,
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  test('does not trigger the Cloudflare deploy hook for draft-only or autosave changes', async () => {
+    const fetchMock = mockDeployHookFetch()
+
+    await createPage({
+      slug: 'draft-no-deploy',
+      title: 'Draft No Deploy',
+    })
+
+    const hook = revalidatePublishedChange('pages')
+
+    await hook({
+      doc: { _status: 'published' },
+      previousDoc: { _status: 'draft' },
+      req: {
+        context: {},
+        payload: {
+          logger: {
+            error: vi.fn(),
+          },
+        },
+        url: 'http://localhost:3000/api/pages/example?autosave=true',
+      },
+    } as never)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  test('does not trigger the Cloudflare deploy hook for page-tree parent moves', async () => {
+    const user = await getSeedUser()
+    const root = await createPublishedPage({
+      slug: 'deploy-move-root',
+      title: 'Deploy Move Root',
+    })
+    const child = await createPublishedPage({
+      parent: String(root.id),
+      slug: 'deploy-move-child',
+      title: 'Deploy Move Child',
+    })
+    const otherRoot = await createPublishedPage({
+      slug: 'deploy-move-other',
+      title: 'Deploy Move Other',
+    })
+    const fetchMock = mockDeployHookFetch()
+
+    const response = await invokeMove({
+      locale: 'en',
+      movedID: child.id,
+      parentID: String(otherRoot.id),
+      user,
+    })
+
+    expect(response.status).toBe(200)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  test('triggers the Cloudflare deploy hook when a published page is deleted', async () => {
+    const page = await createPublishedPage({
+      slug: 'deploy-delete',
+      title: 'Deploy Delete',
+    })
+    const fetchMock = mockDeployHookFetch()
+
+    await payload.delete({
+      collection: 'pages',
+      id: page.id,
+      overrideAccess: true,
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://example.com/deploy',
+      expect.objectContaining({
+        body: JSON.stringify({ source: 'pages' }),
+        method: 'POST',
+      }),
+    )
   })
 
   test('rejects moves when the request does not have update access', async () => {

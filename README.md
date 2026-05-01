@@ -130,6 +130,65 @@ If the published main row goes from `published` to anything else as a result of 
 
 Diagnostics is opt-in and adds extra reads per move. Leave it off in production unless you are actively investigating.
 
+## Drag-And-Drop Is Triggering A Deploy?
+
+A drag-and-drop parent move calls `payload.update()` on the draft only. The published version of the live site is never touched. So in most setups, dragging a page does not trigger any rebuild and you can skip this section.
+
+### When you can skip this section
+
+- The default Payload website template on Vercel (or any host using Next.js ISR), with drafts and autosave on. The template's `afterChange` hook only calls `revalidatePath` and `revalidateTag` from `next/cache`. Those just clear the edge cache. They do not trigger a Vercel build, do not consume build minutes, and do not change what visitors see when the published HTML has not changed.
+- Any setup where your `afterChange` hooks only do in-process cache work (`revalidatePath`, `revalidateTag`, in-memory caches, etc.).
+
+### When you need the one-line fix
+
+You need the fix if **you** wrote an `afterChange` hook that calls something external or expensive on every save. Common cases:
+
+- **Cloudflare Pages / Netlify / Vercel Deploy Hooks** (`fetch(DEPLOY_HOOK_URL)`) - these trigger full rebuilds and burn build minutes.
+- **GitHub Actions** `repository_dispatch` triggers.
+- **Manually-invoked SSG rebuilds**.
+- **Publish notifications** (email, Slack) on status transitions.
+- **Heavy search reindex jobs** (Algolia, Meilisearch full-document push).
+
+Why a tree move trips these: a typical deploy hook fires when `previousDoc?._status === 'published'` so that it catches unpublish events too. A tree move on a published doc can match that condition, but the live site has not actually changed. Without the fix, every drag can fire your deploy.
+
+### The fix
+
+Add one line at the top of your hook. The plugin sets a flag on Payload's [hook context](https://payloadcms.com/docs/hooks/context) for every page-tree parent move, and your hook reads it to bail out early:
+
+```ts
+import { pageTreeMoveContextKey } from 'payload-nested-docs-page-tree'
+
+// at the top of your afterChange hook:
+if (req.context?.[pageTreeMoveContextKey]) return
+```
+
+This goes in **your** hook - the one that calls the deploy webhook. Not in any of the template's stock files.
+
+Full example:
+
+```ts
+import type { CollectionAfterChangeHook } from 'payload'
+
+import { pageTreeMoveContextKey } from 'payload-nested-docs-page-tree'
+
+export const triggerDeployOnPublishedChange: CollectionAfterChangeHook = async ({
+  doc,
+  previousDoc,
+  req,
+}) => {
+  // -- plugin opt-out --
+  if (req.context?.[pageTreeMoveContextKey]) return
+
+  // -- your deploy logic (example) --
+  // Fire on publish, republish, or unpublish - every transition the live site cares about.
+  if (doc._status === 'published' || previousDoc?._status === 'published') {
+    // POST to your Cloudflare / Netlify / Vercel deploy hook here
+  }
+}
+```
+
+See `dev/lib/rebuild.ts` for the full Cloudflare deploy hook example used by the dev playground.
+
 ## Development
 
 For local plugin development, use the internal `dev/` app:

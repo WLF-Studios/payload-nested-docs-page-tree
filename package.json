@@ -40,7 +40,11 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "pnpm clean && pnpm build:types && pnpm build:swc && pnpm copyfiles && pnpm build:strip-tests",
     "build:strip-tests": "rimraf \"dist/**/*.spec.*\"",
@@ -85,6 +89,7 @@
     "next": "16.2.3",
     "open": "^10.1.0",
     "payload": "3.81.0",
+    "payload-cloudflare-build-status": "^1.0.0",
     "prettier": "^3.4.2",
     "qs-esm": "8.0.1",
     "react": "19.2.4",
@@ -130,7 +135,8 @@
     "onlyBuiltDependencies": [
       "sharp",
       "esbuild",
-      "unrs-resolver"
+      "unrs-resolver",
+      "payload-cloudflare-build-status"
     ]
   },
   "dependencies": {

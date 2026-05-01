@@ -78,6 +78,9 @@ importers:
       payload:
         specifier: 3.81.0
         version: 3.81.0(graphql@16.13.2)(typescript@5.7.3)
+      payload-cloudflare-build-status:
+        specifier: ^1.0.0
+        version: 1.0.0(payload@3.81.0(graphql@16.13.2)(typescript@5.7.3))
       prettier:
         specifier: ^3.4.2
         version: 3.8.2
@@ -3907,6 +3910,12 @@ packages:
 
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
+
+  payload-cloudflare-build-status@1.0.0:
+    resolution: {integrity: sha512-uKJuXlNyvBvwtsF17qmotE1w/QVYYXGrI6nh8rJ3jyftvhPZPVq7ZAGarBd8hIhmDaHSIPyje7SUgaxtBLZrlA==}
+    engines: {node: ^18.20.2 || >=20.9.0, pnpm: ^9 || ^10}
+    peerDependencies:
+      payload: ^3.84.0
 
   payload@3.81.0:
     resolution: {integrity: sha512-vnJYPTZQ54BuB3ZPNYSeaggPyvIye016DO+xAxDSlEocK2Gh7UZOFqtws2+G+0z7hIedLN57+/idqevQRFhcuA==}
@@ -9281,6 +9290,10 @@ snapshots:
   path-type@4.0.0: {}
 
   pathe@2.0.3: {}
+
+  payload-cloudflare-build-status@1.0.0(payload@3.81.0(graphql@16.13.2)(typescript@5.7.3)):
+    dependencies:
+      payload: 3.81.0(graphql@16.13.2)(typescript@5.7.3)
 
   payload@3.81.0(graphql@16.13.2)(typescript@5.7.3):
     dependencies:

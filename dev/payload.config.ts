@@ -3,6 +3,7 @@ import { nestedDocsPlugin } from '@payloadcms/plugin-nested-docs'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { MongoMemoryReplSet } from 'mongodb-memory-server'
 import path from 'path'
+import { cloudflareBuildStatusPlugin } from 'payload-cloudflare-build-status'
 import { buildConfig, slugField, type CollectionConfig } from 'payload'
 import { nestedDocsPageTreePlugin } from '../src/index.js'
 import sharp from 'sharp'
@@ -10,6 +11,7 @@ import { fileURLToPath } from 'url'
 
 import { testEmailAdapter } from './helpers/testEmailAdapter.js'
 import { devUser } from './helpers/credentials.js'
+import { revalidateOnDelete, revalidatePublishedChange } from './lib/rebuild.js'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -61,6 +63,10 @@ const Pages: CollectionConfig = {
     },
     slugField(),
   ],
+  hooks: {
+    afterChange: [revalidatePublishedChange('pages')],
+    afterDelete: [revalidateOnDelete('pages')],
+  },
   versions: {
     drafts: {
       autosave: {
@@ -149,6 +155,7 @@ const buildConfigWithMemoryDB = async () => {
         collections: ['pages'],
         diagnostics: true,
       }),
+      cloudflareBuildStatusPlugin(),
     ],
     secret: process.env.PAYLOAD_SECRET || 'test-secret_key',
     sharp,
