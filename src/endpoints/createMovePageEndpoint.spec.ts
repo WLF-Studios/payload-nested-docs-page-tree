@@ -10,7 +10,7 @@ import { createMovePageEndpoint } from './createMovePageEndpoint.js'
 
 type CollectionConfig = {
   access?: { update?: unknown }
-  versions?: { drafts?: unknown }
+  versions?: { drafts?: boolean | { autosave?: unknown } }
 }
 
 function makeReq(args?: {
@@ -81,6 +81,54 @@ describe('createMovePageEndpoint diagnostics', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0].context).toMatchObject({ [pageTreeMoveContextKey]: true })
     expect(req.payload.findByID).not.toHaveBeenCalled()
+  })
+
+  it('omits draft and autosave for collections without drafts', async () => {
+    const endpoint = createMovePageEndpoint({
+      collectionSlug: 'pages',
+      diagnostics: resolveDiagnostics(false),
+      parentFieldSlug: 'parent',
+    })
+    const { calls, req } = makeReq({
+      collectionConfig: { versions: undefined },
+    })
+
+    await endpoint.handler(req)
+
+    expect(calls[0].draft).toBeUndefined()
+    expect(calls[0].autosave).toBeUndefined()
+  })
+
+  it('sets draft but not autosave for collections with drafts only', async () => {
+    const endpoint = createMovePageEndpoint({
+      collectionSlug: 'pages',
+      diagnostics: resolveDiagnostics(false),
+      parentFieldSlug: 'parent',
+    })
+    const { calls, req } = makeReq({
+      collectionConfig: { versions: { drafts: true } },
+    })
+
+    await endpoint.handler(req)
+
+    expect(calls[0].draft).toBe(true)
+    expect(calls[0].autosave).toBeUndefined()
+  })
+
+  it('sets draft and autosave for collections with autosave drafts', async () => {
+    const endpoint = createMovePageEndpoint({
+      collectionSlug: 'pages',
+      diagnostics: resolveDiagnostics(false),
+      parentFieldSlug: 'parent',
+    })
+    const { calls, req } = makeReq({
+      collectionConfig: { versions: { drafts: { autosave: { interval: 100 } } } },
+    })
+
+    await endpoint.handler(req)
+
+    expect(calls[0].draft).toBe(true)
+    expect(calls[0].autosave).toBe(true)
   })
 
   it('emits enter and ok events with one shared flow when enabled', async () => {

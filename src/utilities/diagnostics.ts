@@ -44,7 +44,7 @@ const NOOP_DIAGNOSTICS: Diagnostics = {
 }
 
 const DEFAULT_TAG = '[payload-nested-docs-page-tree]'
-const DEFAULT_TAG_COLOR = '\x1b[38;2;0;255;213m'
+const DEFAULT_TAG_COLOR = '\x1b[38;2;59;130;246m'
 const DEFAULT_TAG_STYLE = '\x1b[1m'
 const RESET_STYLE = '\x1b[0m'
 

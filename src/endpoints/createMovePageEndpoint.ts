@@ -27,7 +27,11 @@ type PayloadCollectionLike = {
       update?: ((args: Record<string, unknown>) => Promise<Record<string, unknown> | boolean> | Record<string, unknown> | boolean) | undefined
     }
     versions?: {
-      drafts?: unknown
+      drafts?:
+        | boolean
+        | {
+            autosave?: boolean | Record<string, unknown>
+          }
     }
   }
   customIDType?: string
@@ -191,6 +195,19 @@ function collectionHasDrafts(args: {
   req: PayloadRequest
 }): boolean {
   return Boolean(getPayloadCollection(args)?.config?.versions?.drafts)
+}
+
+function collectionHasAutosaveDrafts(args: {
+  collectionSlug: string
+  req: PayloadRequest
+}): boolean {
+  const drafts = getPayloadCollection(args)?.config?.versions?.drafts
+
+  if (!drafts || drafts === true) {
+    return false
+  }
+
+  return Boolean(drafts.autosave)
 }
 
 async function assertUpdateAccess(args: {
@@ -371,6 +388,8 @@ export function createMovePageEndpoint(args: {
 
       const flow = createFlowID('move-endpoint')
       const moveStart = Date.now()
+      const hasDrafts = collectionHasDrafts({ collectionSlug, req })
+      const hasAutosave = hasDrafts && collectionHasAutosaveDrafts({ collectionSlug, req })
       const updateData = {
         [parentFieldSlug]:
           body.parentID === null
@@ -386,9 +405,10 @@ export function createMovePageEndpoint(args: {
         context: {
           [pageTreeMoveContextKey]: true,
         } as Record<string, unknown>,
+        autosave: hasAutosave ? true : undefined,
         data: updateData as never,
         depth: 0,
-        draft: collectionHasDrafts({ collectionSlug, req }) ? true : undefined,
+        draft: hasDrafts ? true : undefined,
         id: movedID as never,
         locale: getRequestedLocale(req) as never,
         overrideAccess: true,
@@ -412,6 +432,7 @@ export function createMovePageEndpoint(args: {
         diagnostics.log({
           collection: collectionSlug,
           data: {
+            autosave: updateArgs.autosave ?? null,
             currentParentID,
             draft: updateArgs.draft,
             hasTransaction: Boolean((req as { transactionID?: unknown }).transactionID),
