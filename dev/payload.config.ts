@@ -152,6 +152,7 @@ const buildConfigWithMemoryDB = async () => {
       }),
       nestedDocsPageTreePlugin({
         collections: ['pages', 'categories'],
+        diagnostics: true,
       }),
     ],
     secret: process.env.PAYLOAD_SECRET || 'test-secret_key',

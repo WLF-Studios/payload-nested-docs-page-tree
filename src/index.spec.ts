@@ -6,7 +6,7 @@ import { nestedDocsPageTreePlugin } from './index.js'
 
 type CollectionEndpoint = NonNullable<Exclude<CollectionConfig['endpoints'], false>>[number]
 
-const pageTreeListViewPath = 'plugin-nested-docs-page-tree/rsc#NestedDocsPageTreeListView'
+const pageTreeListViewPath = 'payload-nested-docs-page-tree/rsc#NestedDocsPageTreeListView'
 
 function buildCollection(args: {
   breadcrumbsFieldSlug?: string
@@ -14,6 +14,7 @@ function buildCollection(args: {
   endpointPath?: string
   includeBreadcrumbs?: boolean
   includeParent?: boolean
+  orderable?: boolean
   paginationDefaultLimit?: number
   parentFieldSlug?: string
   slug: string
@@ -25,6 +26,7 @@ function buildCollection(args: {
     endpointPath,
     includeBreadcrumbs = true,
     includeParent = true,
+    orderable = false,
     paginationDefaultLimit,
     parentFieldSlug = 'parent',
     slug,
@@ -87,6 +89,7 @@ function buildCollection(args: {
         ]
       : undefined,
     fields,
+    ...(orderable ? { orderable: true } : {}),
     slug,
   }
 }
@@ -180,6 +183,19 @@ describe('nestedDocsPageTreePlugin', () => {
     )
 
     expect(config.collections?.[0]?.admin?.pagination?.defaultLimit).toBe(25)
+  })
+
+  it('keeps diagnostics off by default and appends an afterChange hook when enabled', () => {
+    const disabledConfig = nestedDocsPageTreePlugin({
+      collections: ['pages'],
+    })(buildConfig([buildCollection({ slug: 'pages' })]))
+    const enabledConfig = nestedDocsPageTreePlugin({
+      collections: ['pages'],
+      diagnostics: true,
+    })(buildConfig([buildCollection({ orderable: true, slug: 'pages' })]))
+
+    expect(disabledConfig.collections?.[0]?.hooks?.afterChange).toBeUndefined()
+    expect(enabledConfig.collections?.[0]?.hooks?.afterChange).toHaveLength(1)
   })
 
   it('returns the original config when the plugin is disabled', () => {

@@ -1,4 +1,4 @@
-# plugin-nested-docs-page-tree
+# payload-nested-docs-page-tree
 
 Companion admin plugin for [`@payloadcms/plugin-nested-docs`](https://payloadcms.com/docs/plugins/nested-docs).
 
@@ -16,7 +16,7 @@ Tested with Payload `3.81` and Next.js `16.2`.
 ## Install
 
 ```bash
-pnpm add plugin-nested-docs-page-tree
+pnpm add payload-nested-docs-page-tree
 ```
 
 ## Quick Setup
@@ -31,7 +31,7 @@ Add `nestedDocsPageTreePlugin(...)` right after `nestedDocsPlugin(...)`:
 
 ```ts
 import { nestedDocsPlugin } from '@payloadcms/plugin-nested-docs'
-import { nestedDocsPageTreePlugin } from 'plugin-nested-docs-page-tree'
+import { nestedDocsPageTreePlugin } from 'payload-nested-docs-page-tree'
 
 export const plugins = [
   nestedDocsPlugin({
@@ -95,6 +95,40 @@ nestedDocsPageTreePlugin({
 - `hideBreadcrumbs`: defaults to `true`
 - `disabled`: defaults to `false`
 - `badges`: optional label and color overrides for `published`, `changed`, and `draft`
+- `diagnostics`: defaults to `false`. Enables structured diagnostic logging for tree-related publish/draft regressions; see below.
+
+## Diagnostics Mode
+
+If a drag-and-drop move is doing something unexpected to publish state, enable diagnostics and reproduce. Each page-tree-triggered write emits one or more structured events on the dev server stdout:
+
+```ts
+nestedDocsPageTreePlugin({
+  collections: ['pages'],
+  diagnostics: true,
+})
+```
+
+Or with a custom sink:
+
+```ts
+nestedDocsPageTreePlugin({
+  collections: ['pages'],
+  diagnostics: {
+    enabled: true,
+    logger: (event) => req.payload.logger.info({ pageTree: event }),
+  },
+})
+```
+
+Each event is one line tagged `[payload-nested-docs-page-tree]` followed by the event source (`move-endpoint:enter`, `move-endpoint:ok`, `move-endpoint:error`, `page-tree-change:after`, `page-tree-change:status-flip`) and a JSON payload that includes:
+
+- `flow`: id shared by every event for one logical move
+- `publishedMainRowBefore` / `publishedMainRowAfter`: fresh reads of the public/published row (`draft: false`)
+- `before` / `after` / `changed`: projected diffs for `_status`, the parent field, and the orderable field when present
+
+If the published main row goes from `published` to anything else as a result of a page-tree change, the plugin additionally emits a `page-tree-change:status-flip` WARN line.
+
+Diagnostics is opt-in and adds extra reads per move. Leave it off in production unless you are actively investigating.
 
 ## Development
 
@@ -128,5 +162,5 @@ pnpm pack
 Then in the external consumer app:
 
 ```bash
-pnpm add /path/plugin-nested-docs-page-tree-*.tgz
+pnpm add /path/payload-nested-docs-page-tree-*.tgz
 ```

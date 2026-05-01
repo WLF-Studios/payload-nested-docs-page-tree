@@ -121,10 +121,10 @@ describe('nestedDocsPageTreePlugin integration', () => {
     const categoriesCollection = payload.collections.categories.config
 
     expect(pagesCollection.admin.components?.views?.list?.Component).toBe(
-      'plugin-nested-docs-page-tree/rsc#NestedDocsPageTreeListView',
+      'payload-nested-docs-page-tree/rsc#NestedDocsPageTreeListView',
     )
     expect(categoriesCollection.admin.components?.views?.list?.Component).toBe(
-      'plugin-nested-docs-page-tree/rsc#NestedDocsPageTreeListView',
+      'payload-nested-docs-page-tree/rsc#NestedDocsPageTreeListView',
     )
     expect(pagesCollection.custom?.nestedDocsPageTreePlugin).toMatchObject({
       badges: {

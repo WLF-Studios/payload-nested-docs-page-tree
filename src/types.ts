@@ -1,5 +1,12 @@
 import type { CollectionSlug } from 'payload'
 
+import type { NestedDocsPageTreePluginDiagnosticsConfig } from './utilities/diagnostics.js'
+
+export type {
+  NestedDocsPageTreePluginDiagnosticEvent,
+  NestedDocsPageTreePluginDiagnosticsConfig,
+} from './utilities/diagnostics.js'
+
 export const nestedDocsPageTreePluginBadgeStatuses = ['published', 'changed', 'draft'] as const
 
 export type NestedDocsPageTreePluginBadgeStatus =
@@ -24,6 +31,13 @@ export type NestedDocsPageTreePluginConfig = {
   breadcrumbsFieldSlug?: string
   collections: CollectionSlug[]
   defaultLimit?: number
+  /**
+   * When set, the plugin emits structured diagnostic events for page-tree
+   * triggered moves, including before/after snapshots of the published main row.
+   * Disabled by default. Pass `true` to log to `console`, or pass an object
+   * with a custom `logger` to route events elsewhere.
+   */
+  diagnostics?: NestedDocsPageTreePluginDiagnosticsConfig
   disabled?: boolean
   hideBreadcrumbs?: boolean
   parentFieldSlug?: string
@@ -45,3 +59,9 @@ export type PageTreeSourceDoc = Record<string, unknown> & {
 }
 
 export const nestedDocsPageTreePluginCustomKey = 'nestedDocsPageTreePlugin'
+
+export const pageTreeMoveContextKey = 'pageTreeMove'
+
+export type PageTreeMoveContext = {
+  [pageTreeMoveContextKey]?: boolean
+}
