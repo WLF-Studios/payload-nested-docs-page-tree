@@ -57,6 +57,7 @@ type PageTreeListViewClientProps = Omit<ListViewClientProps, 'Table' | 'columnSt
   badgeConfig: NestedDocsPageTreePluginResolvedBadgeConfig
   canMoveDocs: boolean
   columnState: Column[]
+  homeIndicatorEnabled: boolean
   parentFieldSlug: string
   query: ListQuery
   sourceDocs: PageTreeSourceDoc[]
@@ -226,19 +227,32 @@ function buildTableColumns(args: {
   columnState: Column[]
   docs: PageTreeDoc[]
   enableRowSelections?: boolean
+  homeIndicatorEnabled: boolean
   parentFieldSlug: string
   t: (key: 'general:noValue' | 'version:changed' | 'version:draft' | 'version:published') => string
   useAsTitle: string
 }): Column[] {
-  const { badgeConfig, columnState, docs, enableRowSelections, parentFieldSlug, t, useAsTitle } =
-    args
+  const {
+    badgeConfig,
+    columnState,
+    docs,
+    enableRowSelections,
+    homeIndicatorEnabled,
+    parentFieldSlug,
+    t,
+    useAsTitle,
+  } = args
   const columnsToUse = columnState.map((column) => {
     if (column.accessor === useAsTitle) {
       return {
         ...column,
         active: true,
         renderedCells: docs.map((doc, index) => (
-          <PageTreeTitleCell doc={doc} key={doc.__pageTreeID ?? index}>
+          <PageTreeTitleCell
+            doc={doc}
+            homeIndicatorEnabled={homeIndicatorEnabled}
+            key={doc.__pageTreeID ?? index}
+          >
             {column.renderedCells?.[index] ?? getDocDisplayLabel(doc)}
           </PageTreeTitleCell>
         )),
@@ -455,6 +469,7 @@ export default function PageTreeListViewClient({
   badgeConfig,
   canMoveDocs,
   columnState,
+  homeIndicatorEnabled,
   parentFieldSlug,
   query,
   sourceDocs,
@@ -574,6 +589,7 @@ export default function PageTreeListViewClient({
         columnState: paginatedColumnState,
         docs: paginatedDocs,
         enableRowSelections: props.enableRowSelections,
+        homeIndicatorEnabled,
         parentFieldSlug,
         t: i18n.t,
         useAsTitle,
@@ -582,6 +598,7 @@ export default function PageTreeListViewClient({
       paginatedColumnState,
       paginatedDocs,
       badgeConfig,
+      homeIndicatorEnabled,
       parentFieldSlug,
       props.enableRowSelections,
       i18n.t,

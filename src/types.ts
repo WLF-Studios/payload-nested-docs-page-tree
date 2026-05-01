@@ -26,6 +26,16 @@ export type NestedDocsPageTreePluginResolvedBadgeConfig = {
   labels: NestedDocsPageTreePluginBadgeMap
 }
 
+export type NestedDocsPageTreePluginHomeIndicatorConfig =
+  | false
+  | {
+      collections?: CollectionSlug[]
+    }
+
+export type NestedDocsPageTreePluginResolvedHomeIndicatorConfig = {
+  enabled: boolean
+}
+
 export type NestedDocsPageTreePluginConfig = {
   badges?: NestedDocsPageTreePluginBadgeConfig
   breadcrumbsFieldSlug?: string
@@ -40,6 +50,7 @@ export type NestedDocsPageTreePluginConfig = {
   diagnostics?: NestedDocsPageTreePluginDiagnosticsConfig
   disabled?: boolean
   hideBreadcrumbs?: boolean
+  homeIndicator?: NestedDocsPageTreePluginHomeIndicatorConfig
   parentFieldSlug?: string
 }
 
@@ -48,6 +59,7 @@ export type NestedDocsPageTreePluginCollectionCustom = {
   breadcrumbsFieldSlug: string
   defaultLimit: number
   hideBreadcrumbs: boolean
+  homeIndicator: NestedDocsPageTreePluginResolvedHomeIndicatorConfig
   parentFieldSlug: string
 }
 

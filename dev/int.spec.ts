@@ -188,6 +188,9 @@ describe('nestedDocsPageTreePlugin integration', () => {
       breadcrumbsFieldSlug: 'breadcrumbs',
       defaultLimit: 100,
       hideBreadcrumbs: true,
+      homeIndicator: {
+        enabled: true,
+      },
       parentFieldSlug: 'parent',
     })
     expect(

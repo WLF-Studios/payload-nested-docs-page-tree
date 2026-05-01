@@ -7,12 +7,20 @@ import { ChevronIcon, DragHandleIcon } from '@payloadcms/ui'
 import { usePageTree } from './PageTreeContext.js'
 import type { PageTreeDoc } from '../utilities/pageTree.js'
 
+const HOME_PAGE_SLUG = 'home'
+
+function isHomePageDoc(doc: PageTreeDoc): boolean {
+  return doc.__pageTreeParentID === null && doc.slug?.trim() === HOME_PAGE_SLUG
+}
+
 export function PageTreeTitleCell({
   children,
   doc,
+  homeIndicatorEnabled,
 }: {
   children: React.ReactNode
   doc: PageTreeDoc
+  homeIndicatorEnabled: boolean
 }) {
   const { activeDragRowID, canMoveDocs, collapsedIDs, pendingMoveRowID, toggleRow } =
     usePageTree()
@@ -22,6 +30,7 @@ export function PageTreeTitleCell({
   const rowID = doc.__pageTreeID
   const isCollapsed = hasChildren && collapsedIDs.has(rowID)
   const dragIsDisabled = !canMoveDocs || !rowID || pendingMoveRowID !== null
+  const showHomeIcon = homeIndicatorEnabled && isHomePageDoc(doc)
   const { attributes, isDragging, listeners, setNodeRef } = useDraggable({
     data: {
       rowID,
@@ -37,6 +46,7 @@ export function PageTreeTitleCell({
       data-row-dragging={isDragging || isActiveDragRow ? 'true' : 'false'}
       data-tree-depth={depth}
       data-tree-has-children={hasChildren ? 'true' : 'false'}
+      data-tree-home={showHomeIcon ? 'true' : undefined}
       data-tree-shade-level={shadeLevel}
       style={{ '--pages-tree-depth': String(depth) } as React.CSSProperties}
     >

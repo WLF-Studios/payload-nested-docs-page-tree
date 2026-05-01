@@ -482,6 +482,7 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
       badgeConfig={pageTreeConfig.badges}
       canMoveDocs={canMoveDocs}
       columnState={renderedTable.columnState}
+      homeIndicatorEnabled={pageTreeConfig.homeIndicator.enabled}
       parentFieldSlug={pageTreeConfig.parentFieldSlug}
       query={query}
       sourceDocs={treeSourceDocs}
