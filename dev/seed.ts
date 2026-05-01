@@ -1,8 +1,8 @@
-import type { Payload } from 'payload'
+import type { Payload, PayloadRequest } from 'payload'
 
 import { devUser } from './helpers/credentials.js'
 
-type SeedCollection = 'categories' | 'pages'
+type SeedCollection = 'pages'
 type SeedPageStatus = 'draft' | 'published'
 type SeedDefinition = {
   parentSlug?: string
@@ -75,11 +75,6 @@ const pageSeedDefinitions: SeedDefinition[] = [
   },
 ]
 
-const categorySeedDefinitions: SeedDefinition[] = [
-  { slug: 'news', title: 'News' },
-  { parentSlug: 'news', slug: 'updates', title: 'Updates' },
-]
-
 async function upsertPublishedDocument(args: {
   collection: SeedCollection
   data: Record<string, unknown>
@@ -89,14 +84,11 @@ async function upsertPublishedDocument(args: {
   status?: SeedPageStatus
 }) {
   const { collection, data, locale, payload, slug, status = 'published' } = args
-  const statusAwareData =
-    collection === 'pages'
-      ? {
-          ...data,
-          _status: status,
-        }
-      : data
-  const shouldSaveAsDraft = collection === 'pages' && status === 'draft'
+  const statusAwareData = {
+    ...data,
+    _status: status,
+  }
+  const shouldSaveAsDraft = status === 'draft'
   const { docs } = await payload.find({
     collection,
     depth: 0,
@@ -113,7 +105,7 @@ async function upsertPublishedDocument(args: {
   } as never)
   const existingDoc = docs[0] as { id: number | string } | undefined
   const currentPublishedDoc =
-    collection === 'pages' && status === 'draft'
+    status === 'draft'
       ? ((await payload.find({
           collection,
           depth: 0,
@@ -273,9 +265,13 @@ export const seed = async (payload: Payload) => {
     payload,
   })
 
-  await seedTree({
-    collection: 'categories',
-    definitions: categorySeedDefinitions,
-    payload,
-  })
+}
+
+export const seedWithRequest = async ({
+  payload,
+}: {
+  payload: Payload
+  req?: PayloadRequest
+}) => {
+  await seed(payload)
 }

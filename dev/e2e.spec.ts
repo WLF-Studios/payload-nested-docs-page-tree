@@ -14,6 +14,13 @@ test('renders the seeded pages tree with the expected columns and mixed statuses
   page,
 }) => {
   await loginAsSeedUser(page)
+  await page.goto('/admin')
+  await Promise.all([
+    page.waitForResponse(
+      (response) => response.url().includes('/next/seed') && response.request().method() === 'POST',
+    ),
+    page.getByRole('button', { name: 'seed the database' }).click(),
+  ])
   await page.goto('/admin/collections/pages')
 
   await expect(page).toHaveURL(/\/admin\/collections\/pages/)

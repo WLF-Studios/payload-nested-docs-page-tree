@@ -9,7 +9,7 @@ import sharp from 'sharp'
 import { fileURLToPath } from 'url'
 
 import { testEmailAdapter } from './helpers/testEmailAdapter.js'
-import { seed } from './seed.js'
+import { devUser } from './helpers/credentials.js'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -26,6 +26,7 @@ const Users: CollectionConfig = {
 
 const Pages: CollectionConfig = {
   slug: 'pages',
+  orderable: true,
   access: {
     create: ({ req }) => Boolean(req.user),
     delete: ({ req }) => Boolean(req.user),
@@ -70,30 +71,6 @@ const Pages: CollectionConfig = {
   },
 }
 
-const Categories: CollectionConfig = {
-  slug: 'categories',
-  access: {
-    create: ({ req }) => Boolean(req.user),
-    delete: ({ req }) => Boolean(req.user),
-    read: () => true,
-    update: ({ req }) => Boolean(req.user),
-  },
-  admin: {
-    pagination: {
-      defaultLimit: 100,
-    },
-    useAsTitle: 'title',
-  },
-  fields: [
-    {
-      name: 'title',
-      type: 'text',
-      required: true,
-    },
-    slugField(),
-  ],
-}
-
 const buildNestedDocURL = (docs: Array<Record<string, unknown>>): string =>
   docs.reduce((url, doc) => {
     const slug = typeof doc.slug === 'string' ? doc.slug.replace(/^\/+|\/+$/g, '') : ''
@@ -114,12 +91,15 @@ const buildConfigWithMemoryDB = async () => {
 
   return buildConfig({
     admin: {
+      components: {
+        beforeDashboard: ['./components/BeforeDashboard'],
+      },
       importMap: {
         baseDir: path.resolve(dirname),
       },
       user: Users.slug,
     },
-    collections: [Users, Pages, Categories],
+    collections: [Users, Pages],
     db: mongooseAdapter({
       ensureIndexes: true,
       url: process.env.DATABASE_URL || '',
@@ -132,11 +112,26 @@ const buildConfigWithMemoryDB = async () => {
       locales: ['en', 'de'],
     },
     onInit: async (payload) => {
-      await seed(payload)
+      const { totalDocs } = await payload.count({
+        collection: 'users',
+        where: {
+          email: {
+            equals: devUser.email,
+          },
+        },
+      } as never)
+
+      if (!totalDocs) {
+        await payload.create({
+          collection: 'users',
+          data: devUser,
+          overrideAccess: true,
+        } as never)
+      }
     },
     plugins: [
       nestedDocsPlugin({
-        collections: ['pages', 'categories'],
+        collections: ['pages'],
         generateLabel: (_, doc) => {
           if (typeof doc.title === 'string' && doc.title.trim()) {
             return doc.title
@@ -151,7 +146,7 @@ const buildConfigWithMemoryDB = async () => {
         generateURL: (docs) => buildNestedDocURL(docs),
       }),
       nestedDocsPageTreePlugin({
-        collections: ['pages', 'categories'],
+        collections: ['pages'],
         diagnostics: true,
       }),
     ],

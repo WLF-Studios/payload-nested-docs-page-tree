@@ -118,14 +118,11 @@ async function invokeMove(args: {
 describe('nestedDocsPageTreePlugin integration', () => {
   test('patches each targeted collection with the tree list view and move endpoint', async () => {
     const pagesCollection = payload.collections.pages.config
-    const categoriesCollection = payload.collections.categories.config
 
     expect(pagesCollection.admin.components?.views?.list?.Component).toBe(
       'payload-nested-docs-page-tree/rsc#NestedDocsPageTreeListView',
     )
-    expect(categoriesCollection.admin.components?.views?.list?.Component).toBe(
-      'payload-nested-docs-page-tree/rsc#NestedDocsPageTreeListView',
-    )
+    expect(pagesCollection.orderable).toBe(true)
     expect(pagesCollection.custom?.nestedDocsPageTreePlugin).toMatchObject({
       badges: {
         colors: {},
