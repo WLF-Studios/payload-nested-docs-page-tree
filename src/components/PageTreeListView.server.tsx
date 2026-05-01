@@ -187,6 +187,39 @@ function normalizeSort(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
+function getOrderableFieldName(collectionConfig: ServerListViewProps['collectionConfig']) {
+  return collectionConfig.orderable === true
+    ? '_order'
+    : typeof collectionConfig.orderable === 'string'
+      ? collectionConfig.orderable
+      : undefined
+}
+
+function getDefaultSort(collectionConfig: ServerListViewProps['collectionConfig']) {
+  return typeof collectionConfig.defaultSort === 'string' ? collectionConfig.defaultSort : undefined
+}
+
+function getEffectiveTreeSort(args: {
+  defaultSort?: string
+  orderableFieldName?: string
+  sort?: string
+}): string | undefined {
+  const { defaultSort, orderableFieldName, sort } = args
+
+  if (sort) {
+    return sort
+  }
+
+  if (
+    orderableFieldName &&
+    (defaultSort === orderableFieldName || defaultSort === `-${orderableFieldName}`)
+  ) {
+    return defaultSort
+  }
+
+  return undefined
+}
+
 function normalizeWhere(value: unknown): any {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value
@@ -341,12 +374,23 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
   }
 
   const query = getCurrentQuery(props, pageTreeConfig.defaultLimit)
+  const orderableFieldName = getOrderableFieldName(props.collectionConfig)
+  const defaultSort = getDefaultSort(props.collectionConfig)
+  const effectiveSort = getEffectiveTreeSort({
+    defaultSort,
+    orderableFieldName,
+    sort: normalizeSort(query.sort),
+  })
+  const effectiveQuery = {
+    ...query,
+    sort: effectiveSort,
+  }
   const locale = props.locale?.code
   const req = {
     i18n: props.i18n,
     locale,
     payload: props.payload,
-    query,
+    query: effectiveQuery,
     user: props.user,
   }
 
@@ -374,11 +418,7 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     locale,
     pagination: false,
     req,
-    sort:
-      normalizeSort(query.sort) ??
-      (typeof props.collectionConfig.defaultSort === 'string'
-        ? props.collectionConfig.defaultSort
-        : undefined),
+    sort: normalizeSort(query.sort) ?? defaultSort,
     user: props.user,
     where,
   } as never)
@@ -394,7 +434,7 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
 
   const orderedDocs = buildPageTreeDocs(treeSourceDocs, {
     parentFieldSlug: pageTreeConfig.parentFieldSlug,
-    sort: normalizeSort(query.sort),
+    sort: effectiveSort,
   })
   const orderedData: PaginatedDocs = {
     docs: orderedDocs,
@@ -440,9 +480,9 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     enableRowSelections: Boolean(props.enableRowSelections),
     fieldPermissions,
     i18n: props.i18n,
-    orderableFieldName: props.collectionConfig.orderable === true ? '_order' : '',
+    orderableFieldName: orderableFieldName ?? '',
     payload: props.payload,
-    query,
+    query: effectiveQuery,
     req,
     tableAppearance: 'default',
     useAsTitle: props.collectionConfig.admin.useAsTitle,
@@ -484,7 +524,7 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
       columnState={renderedTable.columnState}
       homeIndicatorEnabled={pageTreeConfig.homeIndicator.enabled}
       parentFieldSlug={pageTreeConfig.parentFieldSlug}
-      query={query}
+      query={effectiveQuery}
       sourceDocs={treeSourceDocs}
       useAsTitle={props.collectionConfig.admin.useAsTitle}
     />

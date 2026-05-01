@@ -296,10 +296,18 @@ function compareSortValues(leftValue: SortValue, rightValue: SortValue): number 
     return leftValue < rightValue ? -1 : 1
   }
 
-  return String(leftValue).localeCompare(String(rightValue), undefined, {
-    numeric: true,
-    sensitivity: 'base',
-  })
+  // Payload orderable keys use fractional indexing strings (for example `_order`
+  // values like `a5`, `a53`, `a5i`). These must sort by raw lexicographic order
+  // to match the database; numeric-aware locale comparison places `a53` after
+  // `a5i`, which is wrong for these keys.
+  const leftString = String(leftValue)
+  const rightString = String(rightValue)
+
+  if (leftString === rightString) {
+    return 0
+  }
+
+  return leftString < rightString ? -1 : 1
 }
 
 function createTreeNodeComparator(sort?: string) {

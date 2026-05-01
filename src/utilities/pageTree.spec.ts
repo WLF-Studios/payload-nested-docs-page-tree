@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { buildPageTreeDocs, getVisibleTreeDocs, type PageTreeSourceDoc } from './pageTree.js'
 
 type DocInput = {
+  _order?: string
   createdAt?: string
   folder?: number | null
   id: number
@@ -13,6 +14,7 @@ type DocInput = {
 
 const buildDocs = (docs: DocInput[]): PageTreeSourceDoc[] =>
   docs.map((doc) => ({
+    _order: doc._order,
     createdAt: doc.createdAt ?? '2026-01-01T00:00:00.000Z',
     folder: doc.folder ?? null,
     id: doc.id,
@@ -59,6 +61,34 @@ describe('buildPageTreeDocs', () => {
     ])
   })
 
+  it('sorts nested siblings by manual order while preserving hierarchy', () => {
+    const docs = buildDocs([
+      { _order: 'b', id: 40, title: 'Root B' },
+      { _order: 'b', id: 41, parent: 40, title: 'Child B' },
+      { _order: 'a', id: 42, parent: 40, title: 'Child A' },
+      { _order: 'a', id: 43, title: 'Root A' },
+      { _order: 'a', id: 44, parent: 41, title: 'Grandchild A' },
+    ])
+
+    const ordered = buildPageTreeDocs(docs, { sort: '_order' })
+
+    expect(ordered.map((doc) => doc.title)).toEqual([
+      'Root A',
+      'Root B',
+      'Child A',
+      'Child B',
+      'Grandchild A',
+    ])
+    expect(ordered.map((doc) => doc.__pageTreeDepth)).toEqual([0, 0, 1, 1, 2])
+    expect(ordered.map((doc) => doc.__pageTreeParentID)).toEqual([
+      null,
+      null,
+      '40',
+      '40',
+      '41',
+    ])
+  })
+
   it('supports custom parent field slugs', () => {
     const docs = buildDocs([
       { folder: null, id: 20, title: 'Guides' },
@@ -83,6 +113,19 @@ describe('buildPageTreeDocs', () => {
 
     expect(ordered).toHaveLength(3)
     expect(ordered.every((doc) => doc.__pageTreeDepth === 0)).toBe(true)
+  })
+
+  it('sorts fractional-indexing keys lexicographically, not numerically', () => {
+    const docs = buildDocs([
+      { _order: 'ab', id: 100, title: 'Services' },
+      { _order: 'a5', id: 101, parent: 100, title: 'Strategy' },
+      { _order: 'a53', id: 102, parent: 100, title: 'Company News' },
+      { _order: 'a5i', id: 103, parent: 100, title: 'Design' },
+    ])
+
+    expect(
+      buildPageTreeDocs(docs, { sort: '_order' }).map((doc) => doc.title),
+    ).toEqual(['Services', 'Strategy', 'Company News', 'Design'])
   })
 })
 
