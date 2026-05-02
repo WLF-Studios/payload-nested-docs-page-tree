@@ -16,11 +16,14 @@ import {
 import {
   DefaultListView,
   ListQueryProvider,
+  Pill,
   SelectAll,
   SelectRow,
+  SortHeader,
   toast,
   useConfig,
   useLocale,
+  usePreferences,
   useTranslation,
 } from '@payloadcms/ui'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -61,6 +64,7 @@ type PageTreeListViewClientProps = Omit<ListViewClientProps, 'Table' | 'columnSt
   canMoveDocs: boolean
   columnState: Column[]
   homeIndicatorEnabled: boolean
+  orderableFieldName?: string
   parentFieldSlug: string
   query: ListQuery
   sourceDocs: PageTreeSourceDoc[]
@@ -71,6 +75,10 @@ type SelectableRowData = React.ComponentProps<typeof SelectRow>['rowData']
 
 const SILENT_MOVE_MESSAGES = new Set([CANCEL_DRAG_MESSAGE])
 const ALREADY_ROOT_MESSAGE = 'This page is already in root level.'
+
+function getParentMovePreferenceKey(collectionSlug: string): string {
+  return `payload-nested-docs-page-tree:${collectionSlug}:parentMoveHandle`
+}
 
 function getRowDropID(rowID: string): string {
   return `page-drop:${rowID}`
@@ -267,12 +275,37 @@ function renderStatusBadge(args: {
   )
 }
 
+function ParentMoveToggle({
+  collectionSlug,
+  enabled,
+  onToggle,
+}: {
+  collectionSlug: string
+  enabled: boolean
+  onToggle: () => void
+}) {
+  return (
+    <Pill
+      aria-checked={enabled}
+      aria-label={`${enabled ? 'Hide' : 'Show'} parent move handles`}
+      className="pages-hierarchy-parent-move-toggle"
+      id={`pages-hierarchy-parent-move-toggle-${collectionSlug}`}
+      onClick={onToggle}
+      pillStyle={enabled ? 'light-gray' : 'light'}
+      size="small"
+    >
+      Parent move
+    </Pill>
+  )
+}
+
 function buildTableColumns(args: {
   badgeConfig: NestedDocsPageTreePluginResolvedBadgeConfig
   columnState: Column[]
   docs: PageTreeDoc[]
   enableRowSelections?: boolean
   homeIndicatorEnabled: boolean
+  orderableFieldName?: string
   parentFieldSlug: string
   t: (key: 'general:noValue' | 'version:changed' | 'version:draft' | 'version:published') => string
   useAsTitle: string
@@ -283,6 +316,7 @@ function buildTableColumns(args: {
     docs,
     enableRowSelections,
     homeIndicatorEnabled,
+    orderableFieldName,
     parentFieldSlug,
     t,
     useAsTitle,
@@ -346,6 +380,25 @@ function buildTableColumns(args: {
         <SelectRow key={doc.__pageTreeID ?? index} rowData={getSelectableRowData(doc)} />
       )),
     })
+  }
+
+  if (orderableFieldName) {
+    const orderableColumn = {
+      accessor: '_pageTreeOrderSort',
+      active: true,
+      field: { hidden: true } as Column['field'],
+      Heading: <SortHeader />,
+      renderedCells: docs.map((doc, index) => (
+        <span
+          aria-hidden="true"
+          className="pages-hierarchy-order-sort-spacer"
+          key={doc.__pageTreeID ?? index}
+        />
+      )),
+    } satisfies Column
+    const selectColumnIndex = columnsToUse.findIndex((column) => column.accessor === '_select')
+
+    columnsToUse.splice(selectColumnIndex >= 0 ? selectColumnIndex + 1 : 0, 0, orderableColumn)
   }
 
   return columnsToUse
@@ -601,6 +654,7 @@ export default function PageTreeListViewClient({
   canMoveDocs,
   columnState,
   homeIndicatorEnabled,
+  orderableFieldName,
   parentFieldSlug,
   query,
   sourceDocs,
@@ -615,7 +669,13 @@ export default function PageTreeListViewClient({
   const [activeDragRowID, setActiveDragRowID] = React.useState<null | string>(null)
   const [activeDropTarget, setActiveDropTarget] = React.useState<null | PageTreeDropTarget>(null)
   const [collapsedIDs, setCollapsedIDs] = React.useState<Set<string>>(() => new Set())
+  const [parentMoveEnabled, setParentMoveEnabled] = React.useState(false)
   const [pendingMoveRowID, setPendingMoveRowID] = React.useState<null | string>(null)
+  const { getPreference, setPreference } = usePreferences()
+  const parentMovePreferenceKey = React.useMemo(
+    () => getParentMovePreferenceKey(props.collectionSlug),
+    [props.collectionSlug],
+  )
 
   const toggleRow = React.useCallback((rowID: string) => {
     setCollapsedIDs((currentState) => {
@@ -630,6 +690,15 @@ export default function PageTreeListViewClient({
       return nextState
     })
   }, [])
+  const handleParentMoveToggle = React.useCallback(() => {
+    setParentMoveEnabled((currentValue) => {
+      const nextValue = !currentValue
+
+      void setPreference(parentMovePreferenceKey, nextValue)
+
+      return nextValue
+    })
+  }, [parentMovePreferenceKey, setPreference])
   const currentSort = React.useMemo(() => {
     const searchParamSort = searchParams.getAll('sort')
 
@@ -672,11 +741,33 @@ export default function PageTreeListViewClient({
       activeDragRowID,
       canMoveDocs,
       collapsedIDs,
+      parentMoveEnabled,
       pendingMoveRowID,
       toggleRow,
     }),
-    [activeDragRowID, canMoveDocs, collapsedIDs, pendingMoveRowID, toggleRow],
+    [
+      activeDragRowID,
+      canMoveDocs,
+      collapsedIDs,
+      parentMoveEnabled,
+      pendingMoveRowID,
+      toggleRow,
+    ],
   )
+
+  React.useEffect(() => {
+    let isMounted = true
+
+    void getPreference<boolean>(parentMovePreferenceKey).then((storedValue) => {
+      if (isMounted) {
+        setParentMoveEnabled(storedValue === true)
+      }
+    })
+
+    return () => {
+      isMounted = false
+    }
+  }, [getPreference, parentMovePreferenceKey])
 
   React.useEffect(() => {
     setActiveDragRowID(null)
@@ -721,6 +812,7 @@ export default function PageTreeListViewClient({
         docs: paginatedDocs,
         enableRowSelections: props.enableRowSelections,
         homeIndicatorEnabled,
+        orderableFieldName,
         parentFieldSlug,
         t: i18n.t,
         useAsTitle,
@@ -730,6 +822,7 @@ export default function PageTreeListViewClient({
       paginatedDocs,
       badgeConfig,
       homeIndicatorEnabled,
+      orderableFieldName,
       parentFieldSlug,
       props.enableRowSelections,
       i18n.t,
@@ -961,6 +1054,28 @@ export default function PageTreeListViewClient({
       tableColumns,
     ],
   )
+  const beforeActions = React.useMemo(() => {
+    const actions = props.beforeActions ? [...props.beforeActions] : []
+
+    if (canMoveDocs) {
+      actions.unshift(
+        <ParentMoveToggle
+          collectionSlug={props.collectionSlug}
+          enabled={parentMoveEnabled}
+          key="parent-move-toggle"
+          onToggle={handleParentMoveToggle}
+        />,
+      )
+    }
+
+    return actions.length > 0 ? actions : undefined
+  }, [
+    canMoveDocs,
+    handleParentMoveToggle,
+    parentMoveEnabled,
+    props.beforeActions,
+    props.collectionSlug,
+  ])
 
   return (
     <div className={styles.root}>
@@ -969,6 +1084,7 @@ export default function PageTreeListViewClient({
           collectionSlug={props.collectionSlug}
           data={paginatedData}
           modifySearchParams
+          orderableFieldName={orderableFieldName}
           query={{
             ...query,
             limit: currentLimit,
@@ -976,7 +1092,12 @@ export default function PageTreeListViewClient({
             sort: currentSort,
           }}
         >
-          <DefaultListView {...props} Table={tableNode} columnState={paginatedColumnState} />
+          <DefaultListView
+            {...props}
+            beforeActions={beforeActions}
+            Table={tableNode}
+            columnState={paginatedColumnState}
+          />
         </ListQueryProvider>
       </PageTreeProvider>
     </div>

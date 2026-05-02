@@ -46,8 +46,8 @@
 }
 
 .root :global(.pages-hierarchy-insert-row[data-drop-valid='false'][data-drag-over='true'] .pages-hierarchy-insert-row__target::after) {
-  background: rgb(190 90 70 / 0.72);
-  box-shadow: 0 0 0 1px rgb(190 90 70 / 0.2);
+  background: rgb(190 90 70 / 0.42);
+  box-shadow: 0 0 0 1px rgb(190 90 70 / 0.12);
 }
 
 .root :global(.pages-hierarchy-table .table) {
@@ -70,6 +70,39 @@
 .root :global(.pages-hierarchy-table .table tbody tr:nth-child(even) td:first-child),
 .root :global(.pages-hierarchy-table .table tbody tr:nth-child(even) td:last-child) {
   border-radius: 0;
+}
+
+.root :global(.pages-hierarchy-table .table th[id='heading-_pageTreeOrderSort']),
+.root :global(.pages-hierarchy-table .table td.cell-_pageTreeOrderSort) {
+  inline-size: 2rem;
+  max-inline-size: 2rem;
+  min-inline-size: 0;
+  padding-inline: 0.2rem;
+  text-align: center;
+  width: 2rem;
+}
+
+.root :global(.pages-hierarchy-table .table th[id='heading-_pageTreeOrderSort'] .sort-header) {
+  justify-content: center;
+}
+
+.root :global(.pages-hierarchy-table .table th[id='heading-_pageTreeOrderSort'] .sort-header__button svg) {
+  display: none;
+}
+
+.root :global(.pages-hierarchy-table .table th[id='heading-_pageTreeOrderSort'] .sort-header__button::before) {
+  background-color: currentColor;
+  block-size: 12px;
+  content: '';
+  display: block;
+  inline-size: 12px;
+  mask: url("data:image/svg+xml,%3Csvg width='13' height='13' viewBox='0 0 13 13' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7.35714 3.92857H0.5M5.07143 7.35714H0.5M2.78571 10.7857H0.5M9.64286 0.5H0.5M9.64286 3.92857V12.5M9.64286 12.5L12.5 9.92857M9.64286 12.5L6.78571 9.92857' stroke='black' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg width='13' height='13' viewBox='0 0 13 13' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7.35714 3.92857H0.5M5.07143 7.35714H0.5M2.78571 10.7857H0.5M9.64286 0.5H0.5M9.64286 3.92857V12.5M9.64286 12.5L12.5 9.92857M9.64286 12.5L6.78571 9.92857' stroke='black' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.root :global(.pages-hierarchy-order-sort-spacer) {
+  display: block;
+  inline-size: 1rem;
 }
 
 .root :global(.pages-hierarchy-table .table tbody tr:has(.pages-hierarchy-cell[data-tree-shade-level='1'])) {
@@ -151,8 +184,8 @@
 }
 
 :global(html[data-theme='dark']) .root :global(.pages-hierarchy-insert-row[data-drop-valid='false'][data-drag-over='true'] .pages-hierarchy-insert-row__target::after) {
-  background: rgb(255 134 117 / 0.72);
-  box-shadow: 0 0 0 1px rgb(255 134 117 / 0.22);
+  background: rgb(255 134 117 / 0.42);
+  box-shadow: 0 0 0 1px rgb(255 134 117 / 0.12);
 }
 
 :global(html[data-theme='dark']) .root :global(.pages-hierarchy-table .table tbody tr[data-page-tree-row='true'][data-is-drag-source='true']) {
@@ -226,6 +259,11 @@
 }
 
 .root :global(.pages-hierarchy-cell__drag-handle svg) {
+  block-size: 0.95rem;
+  inline-size: 0.95rem;
+}
+
+.root :global(.pages-hierarchy-cell__drag-handle--parent svg) {
   block-size: 0.95rem;
   inline-size: 0.95rem;
 }
