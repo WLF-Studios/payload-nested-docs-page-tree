@@ -6,12 +6,9 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
-  closestCenter,
-  pointerWithin,
   useDroppable,
   useSensor,
   useSensors,
-  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -34,6 +31,11 @@ import { PageTreeProvider } from './PageTreeContext.js'
 import { PageTreeTitleCell } from './PageTreeTitleCell.js'
 import { CANCEL_DRAG_MESSAGE, getDropValidation, type PageTreeDropValidation } from '../utilities/moveValidation.js'
 import {
+  buildInsertDropTargets,
+  getDropTargetParentDoc,
+  type PageTreeDropTarget,
+} from '../utilities/dropTargets.js'
+import {
   buildDocSlugPath,
   buildPageTreeDocs,
   buildProspectiveDocSlugPath,
@@ -41,6 +43,7 @@ import {
   getVisibleTreeDocs,
   type PageTreeDoc,
 } from '../utilities/pageTree.js'
+import { pageTreeCollisionDetectionStrategy } from '../utilities/pageTreeCollision.js'
 import {
   getPageTreeBadgeColor,
   getPageTreeBadgeLabel,
@@ -64,29 +67,10 @@ type PageTreeListViewClientProps = Omit<ListViewClientProps, 'Table' | 'columnSt
   useAsTitle: string
 }
 
-type DropTargetData =
-  | {
-      dropType: 'root'
-    }
-  | {
-      dropType: 'row'
-      rowID: string
-    }
-
 type SelectableRowData = React.ComponentProps<typeof SelectRow>['rowData']
 
-const ROOT_DROP_ID = 'page-drop:root'
 const SILENT_MOVE_MESSAGES = new Set([CANCEL_DRAG_MESSAGE])
-
-const collisionDetectionStrategy: CollisionDetection = (args) => {
-  const pointerCollisions = pointerWithin(args)
-
-  if (pointerCollisions.length > 0) {
-    return pointerCollisions
-  }
-
-  return closestCenter(args)
-}
+const ALREADY_ROOT_MESSAGE = 'This page is already in root level.'
 
 function getRowDropID(rowID: string): string {
   return `page-drop:${rowID}`
@@ -174,6 +158,67 @@ function getSelectableRowData(doc: PageTreeDoc): SelectableRowData {
 
 function shouldSilenceMoveMessage(message?: string): boolean {
   return typeof message === 'string' && SILENT_MOVE_MESSAGES.has(message)
+}
+
+function getDropTargetValidation(args: {
+  activeDoc: PageTreeDoc
+  docsByID: ReadonlyMap<string, PageTreeDoc>
+  dropTarget: PageTreeDropTarget
+}): PageTreeDropValidation {
+  const { activeDoc, docsByID, dropTarget } = args
+
+  if (dropTarget.dropType === 'row') {
+    return getDropValidation({
+      activeDoc,
+      targetDoc: docsByID.get(dropTarget.rowID) ?? undefined,
+    })
+  }
+
+  if (dropTarget.parentID === null) {
+    if (activeDoc.__pageTreeParentID === null) {
+      return {
+        isValid: false,
+        message: ALREADY_ROOT_MESSAGE,
+        parentID: null,
+      }
+    }
+
+    return {
+      isValid: true,
+      parentID: null,
+    }
+  }
+
+  const targetDoc = docsByID.get(dropTarget.parentID)
+
+  if (!targetDoc) {
+    return {
+      isValid: false,
+      message: 'Could not resolve drop target.',
+      parentID: dropTarget.parentID,
+    }
+  }
+
+  if (targetDoc.__pageTreeID === activeDoc.__pageTreeID) {
+    return {
+      isValid: false,
+      message: CANCEL_DRAG_MESSAGE,
+      parentID: targetDoc.__pageTreeID,
+    }
+  }
+
+  if (targetDoc.__pageTreeAncestorIDs.includes(activeDoc.__pageTreeID)) {
+    return {
+      isValid: false,
+      message: 'A document cannot be moved under one of its descendants.',
+      parentID: targetDoc.__pageTreeID,
+    }
+  }
+
+  return {
+    isValid: true,
+    parentID: targetDoc.__pageTreeID,
+  }
 }
 
 function getStatusClassName(
@@ -306,31 +351,44 @@ function buildTableColumns(args: {
   return columnsToUse
 }
 
-function HierarchyRootDropZone({
-  activeDoc,
+function HierarchyInsertRow({
+  activeColumnsCount,
+  activeDragRowID,
+  activeDropTargetID,
+  dropTarget,
+  dropValidation,
   isMovePending,
 }: {
-  activeDoc: PageTreeDoc
+  activeColumnsCount: number
+  activeDragRowID: null | string
+  activeDropTargetID: null | string
+  dropTarget: Extract<PageTreeDropTarget, { dropType: 'insert' }>
+  dropValidation?: PageTreeDropValidation
   isMovePending: boolean
 }) {
-  const rootDropValidation = getDropValidation({ activeDoc })
   const { isOver, setNodeRef } = useDroppable({
-    data: {
-      dropType: 'root',
-    } satisfies DropTargetData,
+    data: dropTarget,
     disabled: isMovePending,
-    id: ROOT_DROP_ID,
+    id: dropTarget.dropID,
   })
+  const hasActiveDrag = Boolean(activeDragRowID)
+  const showInsertLine = isOver && activeDropTargetID === dropTarget.dropID
 
   return (
-    <div
-      className="pages-hierarchy-root-drop"
-      data-drag-over={isOver ? 'true' : 'false'}
-      data-drop-valid={rootDropValidation.isValid ? 'true' : 'false'}
-      ref={setNodeRef}
+    <tr
+      className="pages-hierarchy-insert-row"
+      data-drag-over={showInsertLine ? 'true' : 'false'}
+      data-drop-valid={hasActiveDrag ? (dropValidation?.isValid ? 'true' : 'false') : undefined}
+      data-page-tree-insert="true"
     >
-      <span className="pages-hierarchy-root-drop__label">Move to root</span>
-    </div>
+      <td colSpan={activeColumnsCount}>
+        <div
+          className="pages-hierarchy-insert-row__target"
+          data-insert-depth={dropTarget.depth}
+          ref={setNodeRef}
+        />
+      </td>
+    </tr>
   )
 }
 
@@ -339,6 +397,8 @@ function HierarchyTableRow({
   activeDragRowID,
   doc,
   dropValidation,
+  insertAfterDropID,
+  insertBeforeDropID,
   isMovePending,
   rowIndex,
 }: {
@@ -346,14 +406,18 @@ function HierarchyTableRow({
   activeDragRowID: null | string
   doc: PageTreeDoc
   dropValidation?: PageTreeDropValidation
+  insertAfterDropID: null | string
+  insertBeforeDropID: null | string
   isMovePending: boolean
   rowIndex: number
 }) {
   const { isOver, setNodeRef } = useDroppable({
     data: {
       dropType: 'row',
+      insertAfterDropID,
+      insertBeforeDropID,
       rowID: doc.__pageTreeID,
-    } satisfies DropTargetData,
+    } satisfies Extract<PageTreeDropTarget, { dropType: 'row' }>,
     disabled: isMovePending,
     id: getRowDropID(doc.__pageTreeID),
   })
@@ -367,6 +431,7 @@ function HierarchyTableRow({
       data-drop-valid={hasActiveDrag ? (dropValidation?.isValid ? 'true' : 'false') : undefined}
       data-id={doc.id}
       data-is-drag-source={isActiveDragRow ? 'true' : 'false'}
+      data-page-tree-row="true"
       ref={setNodeRef}
     >
       {activeColumns.map((column, columnIndex) => {
@@ -384,11 +449,15 @@ function HierarchyTableRow({
 
 function HierarchyTable({
   activeDragRowID,
+  activeDropTarget,
+  allDocsByID,
   columns,
   data,
   isMovePending,
 }: {
   activeDragRowID: null | string
+  activeDropTarget: null | PageTreeDropTarget
+  allDocsByID: ReadonlyMap<string, PageTreeDoc>
   columns: Column[]
   data: PageTreeDoc[]
   isMovePending: boolean
@@ -397,11 +466,14 @@ function HierarchyTable({
     () => columns.filter((column) => column?.active),
     [columns],
   )
-  const docsByID = React.useMemo(
-    () => new Map(data.map((doc) => [doc.__pageTreeID, doc])),
-    [data],
+  const insertDropTargets = React.useMemo(() => buildInsertDropTargets(data), [data])
+  const insertDropTargetsByReferenceRowID = React.useMemo(
+    () => new Map(insertDropTargets.map((dropTarget) => [dropTarget.referenceRowID, dropTarget])),
+    [insertDropTargets],
   )
-  const activeDoc = activeDragRowID ? docsByID.get(activeDragRowID) ?? null : null
+  const activeDropTargetID =
+    activeDropTarget?.dropType === 'insert' ? activeDropTarget.dropID : null
+  const activeDoc = activeDragRowID ? allDocsByID.get(activeDragRowID) ?? null : null
   const rowDropValidationByID = React.useMemo(() => {
     if (!activeDoc) {
       return new Map<string, PageTreeDropValidation>()
@@ -410,13 +482,35 @@ function HierarchyTable({
     return new Map(
       data.map((doc) => [
         doc.__pageTreeID,
-        getDropValidation({
+        getDropTargetValidation({
           activeDoc,
-          targetDoc: doc,
+          docsByID: allDocsByID,
+          dropTarget: {
+            dropType: 'row',
+            insertAfterDropID: null,
+            insertBeforeDropID: null,
+            rowID: doc.__pageTreeID,
+          },
         }),
       ]),
     )
-  }, [activeDoc, data])
+  }, [activeDoc, allDocsByID, data])
+  const insertDropValidationByID = React.useMemo(() => {
+    if (!activeDoc) {
+      return new Map<string, PageTreeDropValidation>()
+    }
+
+    return new Map(
+      insertDropTargets.map((dropTarget) => [
+        dropTarget.dropID,
+        getDropTargetValidation({
+          activeDoc,
+          docsByID: allDocsByID,
+          dropTarget,
+        }),
+      ]),
+    )
+  }, [activeDoc, allDocsByID, insertDropTargets])
 
   if (activeColumns.length === 0) {
     return <div>No columns selected</div>
@@ -431,9 +525,6 @@ function HierarchyTable({
         .filter(Boolean)
         .join(' ')}
     >
-      {activeDoc ? (
-        <HierarchyRootDropZone activeDoc={activeDoc} isMovePending={isMovePending} />
-      ) : null}
       <div className="table table--appearance-default">
         <table cellPadding="0" cellSpacing="0">
           <thead>
@@ -446,17 +537,57 @@ function HierarchyTable({
             </tr>
           </thead>
           <tbody>
-            {data.map((doc, rowIndex) => (
-              <HierarchyTableRow
-                activeColumns={activeColumns}
-                activeDragRowID={activeDragRowID}
-                doc={doc}
-                dropValidation={rowDropValidationByID.get(doc.__pageTreeID)}
-                isMovePending={isMovePending}
-                key={doc.__pageTreeID}
-                rowIndex={rowIndex}
-              />
-            ))}
+            {data.map((doc, rowIndex) => {
+              const rootInsertBeforeDropTarget =
+                doc.__pageTreeParentID === null
+                  ? insertDropTargetsByReferenceRowID.get(doc.__pageTreeID)
+                  : undefined
+              const rootInsertTargetIndex =
+                rootInsertBeforeDropTarget !== undefined
+                  ? insertDropTargets.indexOf(rootInsertBeforeDropTarget)
+                  : -1
+              const rootInsertAfterDropTarget =
+                rootInsertTargetIndex >= 0
+                  ? insertDropTargets[rootInsertTargetIndex + 1]
+                  : undefined
+              const isTrailingRootInsert =
+                rootInsertAfterDropTarget === insertDropTargets[insertDropTargets.length - 1]
+              const nextVisibleDoc = data[rowIndex + 1]
+              const hasVisibleDescendantAfter =
+                nextVisibleDoc?.__pageTreeAncestorIDs.includes(doc.__pageTreeID) ?? false
+
+              return (
+                <React.Fragment key={doc.__pageTreeID}>
+                  {rootInsertBeforeDropTarget ? (
+                    <HierarchyInsertRow
+                      activeColumnsCount={activeColumns.length}
+                      activeDragRowID={activeDragRowID}
+                      activeDropTargetID={activeDropTargetID}
+                      dropTarget={rootInsertBeforeDropTarget}
+                      dropValidation={insertDropValidationByID.get(
+                        rootInsertBeforeDropTarget.dropID,
+                      )}
+                      isMovePending={isMovePending}
+                      key={rootInsertBeforeDropTarget.dropID}
+                    />
+                  ) : null}
+                  <HierarchyTableRow
+                    activeColumns={activeColumns}
+                    activeDragRowID={activeDragRowID}
+                    doc={doc}
+                    dropValidation={rowDropValidationByID.get(doc.__pageTreeID)}
+                    insertAfterDropID={
+                      hasVisibleDescendantAfter || isTrailingRootInsert
+                        ? null
+                        : rootInsertAfterDropTarget?.dropID ?? null
+                    }
+                    insertBeforeDropID={rootInsertBeforeDropTarget?.dropID ?? null}
+                    isMovePending={isMovePending}
+                    rowIndex={rowIndex}
+                  />
+                </React.Fragment>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -482,7 +613,7 @@ export default function PageTreeListViewClient({
   const locale = useLocale()
   const { i18n } = useTranslation()
   const [activeDragRowID, setActiveDragRowID] = React.useState<null | string>(null)
-  const [activeDropTarget, setActiveDropTarget] = React.useState<DropTargetData | null>(null)
+  const [activeDropTarget, setActiveDropTarget] = React.useState<null | PageTreeDropTarget>(null)
   const [collapsedIDs, setCollapsedIDs] = React.useState<Set<string>>(() => new Set())
   const [pendingMoveRowID, setPendingMoveRowID] = React.useState<null | string>(null)
 
@@ -618,13 +749,14 @@ export default function PageTreeListViewClient({
       })
     }
 
-    const targetDoc =
-      activeDropTarget.dropType === 'row'
-        ? allDocsByID.get(activeDropTarget.rowID) ?? null
-        : null
-    const dropValidation = getDropValidation({
+    const targetDoc = getDropTargetParentDoc({
+      docsByID: allDocsByID,
+      dropTarget: activeDropTarget,
+    })
+    const dropValidation = getDropTargetValidation({
       activeDoc: activeDragDoc,
-      targetDoc: targetDoc ?? undefined,
+      docsByID: allDocsByID,
+      dropTarget: activeDropTarget,
     })
 
     if (!dropValidation.isValid) {
@@ -668,25 +800,20 @@ export default function PageTreeListViewClient({
     [canMoveDocs, isMovePending, paginatedDocsByID],
   )
   const handleDragOver = React.useCallback((event: DragOverEvent) => {
-    const overData = event.over?.data.current as DropTargetData | undefined
+    const overData = event.over?.data.current as PageTreeDropTarget | undefined
 
     if (!overData) {
       setActiveDropTarget(null)
       return
     }
 
-    if (overData.dropType === 'root') {
-      setActiveDropTarget({
-        dropType: 'root',
-      })
+    if (overData.dropType === 'insert') {
+      setActiveDropTarget(overData)
       return
     }
 
-    if (overData.dropType === 'row' && typeof overData.rowID === 'string') {
-      setActiveDropTarget({
-        dropType: 'row',
-        rowID: overData.rowID,
-      })
+    if (overData.dropType === 'row') {
+      setActiveDropTarget(overData)
       return
     }
 
@@ -696,20 +823,19 @@ export default function PageTreeListViewClient({
     async (event: DragEndEvent) => {
       const rowID = event.active.data.current?.rowID
       const activeDoc = typeof rowID === 'string' ? paginatedDocsByID.get(rowID) ?? null : null
-      const overData = event.over?.data.current as DropTargetData | undefined
+      const overData = event.over?.data.current as PageTreeDropTarget | undefined
 
       setActiveDragRowID(null)
       setActiveDropTarget(null)
 
-      if (!activeDoc || !overData) {
+      if (typeof rowID !== 'string' || !activeDoc || !overData) {
         return
       }
 
-      const targetDoc =
-        overData.dropType === 'row' ? paginatedDocsByID.get(overData.rowID) ?? null : null
-      const dropValidation = getDropValidation({
+      const dropValidation = getDropTargetValidation({
         activeDoc,
-        targetDoc: targetDoc ?? undefined,
+        docsByID: allDocsByID,
+        dropTarget: overData,
       })
 
       if (!dropValidation.isValid) {
@@ -717,6 +843,10 @@ export default function PageTreeListViewClient({
           toast.error(dropValidation.message ?? 'Could not move document.')
         }
 
+        return
+      }
+
+      if (overData.dropType === 'insert' && activeDoc.__pageTreeParentID === dropValidation.parentID) {
         return
       }
 
@@ -774,7 +904,15 @@ export default function PageTreeListViewClient({
         setPendingMoveRowID(null)
       }
     },
-    [config.routes.api, i18n.language, locale?.code, paginatedDocsByID, props.collectionSlug, router],
+    [
+      allDocsByID,
+      config.routes.api,
+      i18n.language,
+      locale?.code,
+      paginatedDocsByID,
+      props.collectionSlug,
+      router,
+    ],
   )
   const handleDragEndSync = React.useCallback(
     (event: DragEndEvent) => {
@@ -786,7 +924,7 @@ export default function PageTreeListViewClient({
   const tableNode = React.useMemo(
     () => (
       <DndContext
-        collisionDetection={collisionDetectionStrategy}
+        collisionDetection={pageTreeCollisionDetectionStrategy}
         onDragCancel={handleDragCancel}
         onDragEnd={handleDragEndSync}
         onDragOver={handleDragOver}
@@ -795,11 +933,13 @@ export default function PageTreeListViewClient({
       >
         <HierarchyTable
           activeDragRowID={activeDragRowID}
+          activeDropTarget={activeDropTarget}
+          allDocsByID={allDocsByID}
           columns={tableColumns}
           data={paginatedDocs}
           isMovePending={isMovePending}
         />
-        <DragOverlay dropAnimation={null}>
+        <DragOverlay dropAnimation={null} style={{ cursor: 'grabbing' }}>
           {activeDragPreviewPath ? (
             <div className="pages-hierarchy-drag-overlay">{activeDragPreviewPath}</div>
           ) : null}
@@ -809,6 +949,8 @@ export default function PageTreeListViewClient({
     [
       activeDragPreviewPath,
       activeDragRowID,
+      activeDropTarget,
+      allDocsByID,
       handleDragCancel,
       handleDragEndSync,
       handleDragOver,

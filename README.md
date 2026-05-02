@@ -107,7 +107,7 @@ nestedDocsPageTreePlugin({
       draft: 'Draft Only',
     },
     colors: {
-      published: '#1e90ff',
+      published: '#16a34a',
       changed: '#9333ea',
       draft: '#dc2626',
     },

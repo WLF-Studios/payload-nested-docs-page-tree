@@ -27,6 +27,34 @@ describe('normalizeNestedDocsPageTreePluginBadgeConfig', () => {
     })
   })
 
+  it('keeps the documented custom badge example', () => {
+    expect(
+      normalizeNestedDocsPageTreePluginBadgeConfig({
+        colors: {
+          changed: '#9333ea',
+          draft: '#dc2626',
+          published: '#1e90ff',
+        },
+        labels: {
+          changed: 'Has Changes',
+          draft: 'Draft Only',
+          published: 'Live',
+        },
+      }),
+    ).toEqual({
+      colors: {
+        changed: '#9333ea',
+        draft: '#dc2626',
+        published: '#1e90ff',
+      },
+      labels: {
+        changed: 'Has Changes',
+        draft: 'Draft Only',
+        published: 'Live',
+      },
+    })
+  })
+
   it('drops unsupported and empty values', () => {
     expect(
       normalizeNestedDocsPageTreePluginBadgeConfig({

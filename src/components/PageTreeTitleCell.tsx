@@ -33,6 +33,7 @@ export function PageTreeTitleCell({
   const showHomeIcon = homeIndicatorEnabled && isHomePageDoc(doc)
   const { attributes, isDragging, listeners, setNodeRef } = useDraggable({
     data: {
+      dragType: 'move',
       rowID,
     },
     disabled: dragIsDisabled,

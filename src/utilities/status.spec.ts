@@ -45,6 +45,36 @@ describe('getPageTreeDisplayStatusLabelKey', () => {
 describe('getPageTreeBadgeLabel', () => {
   const translate = (key: ReturnType<typeof getPageTreeDisplayStatusLabelKey>) => key
 
+  it('uses the documented custom labels for each status', () => {
+    const badgeLabels = {
+      changed: 'Has Changes',
+      draft: 'Draft Only',
+      published: 'Live',
+    }
+
+    expect(
+      getPageTreeBadgeLabel({
+        badgeLabels,
+        status: 'published',
+        t: translate,
+      }),
+    ).toBe('Live')
+    expect(
+      getPageTreeBadgeLabel({
+        badgeLabels,
+        status: 'changed',
+        t: translate,
+      }),
+    ).toBe('Has Changes')
+    expect(
+      getPageTreeBadgeLabel({
+        badgeLabels,
+        status: 'draft',
+        t: translate,
+      }),
+    ).toBe('Draft Only')
+  })
+
   it('uses the custom label for known statuses', () => {
     expect(
       getPageTreeBadgeLabel({
@@ -69,6 +99,33 @@ describe('getPageTreeBadgeLabel', () => {
 })
 
 describe('getPageTreeBadgeColor', () => {
+  it('uses the documented custom colors for each status', () => {
+    const badgeColors = {
+      changed: '#9333ea',
+      draft: '#dc2626',
+      published: '#1e90ff',
+    }
+
+    expect(
+      getPageTreeBadgeColor({
+        badgeColors,
+        status: 'published',
+      }),
+    ).toBe('#1e90ff')
+    expect(
+      getPageTreeBadgeColor({
+        badgeColors,
+        status: 'changed',
+      }),
+    ).toBe('#9333ea')
+    expect(
+      getPageTreeBadgeColor({
+        badgeColors,
+        status: 'draft',
+      }),
+    ).toBe('#dc2626')
+  })
+
   it('returns the custom color for known statuses', () => {
     expect(
       getPageTreeBadgeColor({
