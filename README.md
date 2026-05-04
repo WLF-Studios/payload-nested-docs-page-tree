@@ -95,7 +95,8 @@ The tree view supports three document states:
 - `changed`: live, but has unpublished changes
 - `draft`: not published
 
-To override badge labels or colors, pass a `badges` object:
+Badge colors use Payload theme tokens by default. To override badge labels or colors, pass a
+`badges` object:
 
 ```ts
 nestedDocsPageTreePlugin({
@@ -107,15 +108,17 @@ nestedDocsPageTreePlugin({
       draft: 'Draft Only',
     },
     colors: {
-      published: '#16a34a',
-      changed: '#9333ea',
-      draft: '#dc2626',
+      // Example: use a custom green / orange / yellow palette.
+      published: '#bbf3b0',
+      changed: '#b9eaf3',
+      draft: '#f8d5a7',
     },
   },
 }),
 ```
 
-`labels` and `colors` are optional partial overrides. Missing entries fall back to the built-in defaults.
+`labels` and `colors` are optional partial overrides. Missing entries fall back to the built-in
+Payload-themed defaults.
 
 ## Configuration
 

@@ -222,6 +222,55 @@ describe('resolvePageTreePointerCollisionID', () => {
     ).toBe(beforeInsertTarget.dropID)
   })
 
+  it('keeps the row target on insert edges for order drags', () => {
+    expect(
+      resolvePageTreePointerCollisionID({
+        activeParentID: 'parent',
+        collisions: [
+          {
+            id: 'page-sort:1',
+            dragType: 'order',
+            parentID: 'parent',
+            rect: {
+              bottom: 140,
+              top: 100,
+            },
+          },
+          buildRowCollision({}),
+        ],
+        dragType: 'order',
+        pointerCoordinates: {
+          x: 24,
+          y: 100 + 1,
+        },
+      }),
+    ).toBe('page-sort:1')
+  })
+
+  it('ignores sortable order collisions from another parent', () => {
+    expect(
+      resolvePageTreePointerCollisionID({
+        activeParentID: 'parent',
+        collisions: [
+          {
+            id: 'page-sort:child',
+            dragType: 'order',
+            parentID: 'other-parent',
+            rect: {
+              bottom: 140,
+              top: 100,
+            },
+          },
+        ],
+        dragType: 'order',
+        pointerCoordinates: {
+          x: 24,
+          y: 100 + 1,
+        },
+      }),
+    ).toBeNull()
+  })
+
   it('returns null when pointer coordinates are unavailable so the caller can fall back', () => {
     expect(
       resolvePageTreePointerCollisionID({

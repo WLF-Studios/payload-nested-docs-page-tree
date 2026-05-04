@@ -152,6 +152,13 @@ const buildConfigWithMemoryDB = async () => {
         generateURL: (docs) => buildNestedDocURL(docs),
       }),
       nestedDocsPageTreePlugin({
+        badges: {
+          colors: {
+            published: '#bbf3b0',
+            changed: '#b9eaf3',
+            draft: '#f8d5a7',
+          },
+        },
         collections: ['pages'],
         diagnostics: true,
       }),

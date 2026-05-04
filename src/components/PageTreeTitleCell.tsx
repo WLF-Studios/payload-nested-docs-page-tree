@@ -1,11 +1,12 @@
 'use client'
 
-import React from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { ChevronIcon, DragHandleIcon, useListQuery } from '@payloadcms/ui'
+import React from 'react'
 
-import { usePageTree } from './PageTreeContext.js'
 import type { PageTreeDoc } from '../utilities/pageTree.js'
+
+import { usePageTree, usePageTreeRowDnd } from './PageTreeContext.js'
 
 const HOME_PAGE_SLUG = 'home'
 
@@ -28,12 +29,13 @@ function ParentMoveHandleIcon() {
       width="20"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <circle className="fill" cx="10.6667" cy="5.33332" r="0.66667" />
-      <circle className="fill" cx="14.6667" cy="5.33332" r="0.66667" />
-      <circle className="fill" cx="7.99999" cy="9.99999" r="0.66667" />
-      <circle className="fill" cx="12" cy="9.99999" r="0.66667" />
-      <circle className="fill" cx="5.33332" cy="14.6667" r="0.66667" />
-      <circle className="fill" cx="9.33332" cy="14.6667" r="0.66667" />
+      <path
+        className="stroke"
+        d="M13.75 4.25L6.25 15.75"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="2.25"
+      />
     </svg>
   )
 }
@@ -55,6 +57,7 @@ export function PageTreeTitleCell({
     pendingMoveRowID,
     toggleRow,
   } = usePageTree()
+  const rowDnd = usePageTreeRowDnd()
   const { orderableFieldName, query = {} } = useListQuery()
   const depth = doc.__pageTreeDepth
   const hasChildren = doc.__pageTreeHasChildren
@@ -63,25 +66,26 @@ export function PageTreeTitleCell({
   const isCollapsed = hasChildren && collapsedIDs.has(rowID)
   const dragIsDisabled = !canMoveDocs || !rowID || pendingMoveRowID !== null
   const showHomeIcon = homeIndicatorEnabled && isHomePageDoc(doc)
-  const { attributes, isDragging, listeners, setNodeRef } = useDraggable({
+  const parentMoveDrag = useDraggable({
+    id: `page-drag:${rowID}`,
     data: {
       dragType: 'move',
       rowID,
     },
     disabled: dragIsDisabled,
-    id: `page-drag:${rowID}`,
   })
-  const isActiveDragRow = activeDragRowID === rowID
   const querySort = normalizeSort(query.sort)
   const showOrderableHandle =
     canMoveDocs &&
     Boolean(orderableFieldName) &&
     (querySort === orderableFieldName || querySort === `-${orderableFieldName}`)
+  const isActiveDragRow = activeDragRowID === rowID
+  const isDragging = parentMoveDrag.isDragging || rowDnd?.isOrderDragging || isActiveDragRow
 
   return (
     <div
       className="pages-hierarchy-cell"
-      data-row-dragging={isDragging || isActiveDragRow ? 'true' : 'false'}
+      data-row-dragging={isDragging ? 'true' : 'false'}
       data-tree-depth={depth}
       data-tree-has-children={hasChildren ? 'true' : 'false'}
       data-tree-home={showHomeIcon ? 'true' : undefined}
@@ -113,22 +117,41 @@ export function PageTreeTitleCell({
         <span className="pages-hierarchy-cell__spacer" />
       )}
       {showOrderableHandle ? (
-        <span
-          aria-hidden="true"
-          className="pages-hierarchy-cell__drag-handle pages-hierarchy-cell__drag-handle--orderable"
+        <button
+          {...(rowDnd?.orderHandleAttributes ?? {})}
+          {...(rowDnd?.orderHandleListeners ?? {})}
+          aria-label="Reorder document within this parent"
+          className={[
+            'pages-hierarchy-cell__drag-handle',
+            'pages-hierarchy-cell__drag-handle--orderable',
+            rowDnd?.isOrderDragging || isActiveDragRow
+              ? 'pages-hierarchy-cell__drag-handle--active'
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          disabled={dragIsDisabled || !rowDnd}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+          }}
+          ref={rowDnd?.orderHandleRef}
+          type="button"
         >
           <DragHandleIcon />
-        </span>
+        </button>
       ) : null}
       {canMoveDocs && parentMoveEnabled ? (
         <button
-          {...attributes}
-          {...listeners}
+          {...parentMoveDrag.attributes}
+          {...parentMoveDrag.listeners}
           aria-label="Move document under another page"
           className={[
             'pages-hierarchy-cell__drag-handle',
             'pages-hierarchy-cell__drag-handle--parent',
-            isDragging || isActiveDragRow ? 'pages-hierarchy-cell__drag-handle--active' : '',
+            parentMoveDrag.isDragging || isActiveDragRow
+              ? 'pages-hierarchy-cell__drag-handle--active'
+              : '',
           ]
             .filter(Boolean)
             .join(' ')}
@@ -137,7 +160,7 @@ export function PageTreeTitleCell({
             event.preventDefault()
             event.stopPropagation()
           }}
-          ref={setNodeRef}
+          ref={parentMoveDrag.setNodeRef}
           type="button"
         >
           <ParentMoveHandleIcon />

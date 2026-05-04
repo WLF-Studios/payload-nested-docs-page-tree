@@ -1,5 +1,7 @@
 'use client'
 
+import type { DraggableAttributes, DraggableSyntheticListeners } from '@dnd-kit/core'
+
 import React from 'react'
 
 type PageTreeContextValue = {
@@ -11,7 +13,15 @@ type PageTreeContextValue = {
   toggleRow: (rowID: string) => void
 }
 
+type PageTreeRowDndContextValue = {
+  isOrderDragging: boolean
+  orderHandleAttributes: DraggableAttributes
+  orderHandleListeners: DraggableSyntheticListeners
+  orderHandleRef: (element: HTMLElement | null) => void
+}
+
 const PageTreeContext = React.createContext<null | PageTreeContextValue>(null)
+const PageTreeRowDndContext = React.createContext<null | PageTreeRowDndContextValue>(null)
 
 export function PageTreeProvider({
   children,
@@ -21,6 +31,16 @@ export function PageTreeProvider({
   value: PageTreeContextValue
 }) {
   return <PageTreeContext.Provider value={value}>{children}</PageTreeContext.Provider>
+}
+
+export function PageTreeRowDndProvider({
+  children,
+  value,
+}: {
+  children: React.ReactNode
+  value: PageTreeRowDndContextValue
+}) {
+  return <PageTreeRowDndContext.Provider value={value}>{children}</PageTreeRowDndContext.Provider>
 }
 
 export function usePageTree(): PageTreeContextValue {
@@ -38,4 +58,8 @@ export function usePageTree(): PageTreeContextValue {
   }
 
   return context
+}
+
+export function usePageTreeRowDnd(): null | PageTreeRowDndContextValue {
+  return React.useContext(PageTreeRowDndContext)
 }
