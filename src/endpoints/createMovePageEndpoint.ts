@@ -1,4 +1,4 @@
-import type { Endpoint, PayloadRequest, Where } from 'payload'
+import type { Endpoint, PayloadRequest } from 'payload'
 
 import {
   DIAGNOSTICS_FLOW_CONTEXT_KEY,
@@ -14,6 +14,15 @@ import {
   stringifyDocID,
 } from '../utilities/pageTree.js'
 import { pageTreeMoveContextKey, type PageTreeSourceDoc } from '../types.js'
+import {
+  assertUpdateAccess,
+  collectionHasAutosaveDrafts,
+  collectionHasDrafts,
+  getRequestedLocale,
+  normalizeID,
+  respond,
+  toCollectionID,
+} from './shared.js'
 
 const SNAPSHOT_FIELDS = ['_status'] as const
 
@@ -21,40 +30,8 @@ type MoveDocumentRequestBody = {
   parentID: null | string
 }
 
-type PayloadCollectionLike = {
-  config?: {
-    access?: {
-      update?: ((args: Record<string, unknown>) => Promise<Record<string, unknown> | boolean> | Record<string, unknown> | boolean) | undefined
-    }
-    versions?: {
-      drafts?:
-        | boolean
-        | {
-            autosave?: boolean | Record<string, unknown>
-          }
-    }
-  }
-  customIDType?: string
-}
-
-function respond(status: number, body: Record<string, unknown>) {
-  return Response.json(body, { status })
-}
-
 function hasOwnProperty(value: object, key: PropertyKey): boolean {
   return Object.prototype.hasOwnProperty.call(value, key)
-}
-
-function normalizeID(value: unknown): null | string {
-  if (value === null || value === undefined || value === '') {
-    return null
-  }
-
-  if (typeof value === 'number' || typeof value === 'string') {
-    return stringifyDocID(value)
-  }
-
-  return null
 }
 
 function normalizeMoveDocumentBody(value: unknown): MoveDocumentRequestBody | null {
@@ -142,132 +119,6 @@ async function readBodyFromRequest(
   return { body: null, lastAttempt }
 }
 
-function getPayloadCollection({
-  collectionSlug,
-  req,
-}: {
-  collectionSlug: string
-  req: PayloadRequest
-}): PayloadCollectionLike | undefined {
-  return (req.payload.collections as unknown as Record<string, PayloadCollectionLike | undefined>)[
-    collectionSlug
-  ]
-}
-
-function usesNumericID({
-  collectionSlug,
-  req,
-}: {
-  collectionSlug: string
-  req: PayloadRequest
-}): boolean {
-  const collection = getPayloadCollection({ collectionSlug, req })
-
-  if (!collection) {
-    return false
-  }
-
-  const idType = collection.customIDType ?? req.payload.db.defaultIDType
-
-  return idType === 'number'
-}
-
-function toCollectionID(args: {
-  collectionSlug: string
-  id: string
-  req: PayloadRequest
-}): number | string {
-  const { collectionSlug, id, req } = args
-
-  if (!usesNumericID({ collectionSlug, req })) {
-    return id
-  }
-
-  return Number(id)
-}
-
-function getRequestedLocale(req: PayloadRequest): string | undefined {
-  return req.locale && req.locale !== 'all' ? req.locale : undefined
-}
-
-function collectionHasDrafts(args: {
-  collectionSlug: string
-  req: PayloadRequest
-}): boolean {
-  return Boolean(getPayloadCollection(args)?.config?.versions?.drafts)
-}
-
-function collectionHasAutosaveDrafts(args: {
-  collectionSlug: string
-  req: PayloadRequest
-}): boolean {
-  const drafts = getPayloadCollection(args)?.config?.versions?.drafts
-
-  if (!drafts || drafts === true) {
-    return false
-  }
-
-  return Boolean(drafts.autosave)
-}
-
-async function assertUpdateAccess(args: {
-  collectionSlug: string
-  movedID: number | string
-  nextParentID: null | number | string
-  parentFieldSlug: string
-  req: PayloadRequest
-}): Promise<Response | null> {
-  const { collectionSlug, movedID, nextParentID, parentFieldSlug, req } = args
-  const collection = getPayloadCollection({ collectionSlug, req })
-  const updateAccess = collection?.config?.access?.update
-
-  if (!updateAccess) {
-    return null
-  }
-
-  const accessResult = await updateAccess({
-    data: { [parentFieldSlug]: nextParentID } as never,
-    id: movedID as never,
-    req,
-  })
-
-  if (accessResult === false) {
-    return respond(403, {
-      message: req.i18n.t('error:unauthorized'),
-    })
-  }
-
-  if (accessResult && typeof accessResult === 'object') {
-    const matchingDocs = await req.payload.find({
-      collection: collectionSlug as never,
-      depth: 0,
-      draft: collectionHasDrafts({ collectionSlug, req }) ? true : undefined,
-      limit: 1,
-      locale: getRequestedLocale(req) as never,
-      overrideAccess: true,
-      req,
-      where: {
-        and: [
-          {
-            id: {
-              equals: movedID,
-            },
-          },
-          accessResult as Where,
-        ],
-      },
-    } as never)
-
-    if (matchingDocs.docs.length === 0) {
-      return respond(403, {
-        message: req.i18n.t('error:unauthorized'),
-      })
-    }
-  }
-
-  return null
-}
-
 export function createMovePageEndpoint(args: {
   collectionSlug: string
   diagnostics: Diagnostics
@@ -324,9 +175,8 @@ export function createMovePageEndpoint(args: {
             })
       const accessError = await assertUpdateAccess({
         collectionSlug,
-        movedID,
-        nextParentID,
-        parentFieldSlug,
+        data: { [parentFieldSlug]: nextParentID },
+        id: movedID,
         req,
       })
 

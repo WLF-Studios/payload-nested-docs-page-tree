@@ -5,6 +5,7 @@ import type {
 } from 'payload'
 
 import { createMovePageEndpoint } from './endpoints/createMovePageEndpoint.js'
+import { createReorderPageEndpoint } from './endpoints/createReorderPageEndpoint.js'
 import type {
   NestedDocsPageTreePluginCollectionCustom,
   NestedDocsPageTreePluginConfig,
@@ -193,10 +194,19 @@ function validateTargetCollection(args: {
   const existingMoveEndpoint = getCollectionEndpoints(collection).find(
     (endpoint) => endpoint.path === '/:id/move',
   )
+  const existingReorderEndpoint = getCollectionEndpoints(collection).find(
+    (endpoint) => endpoint.path === '/:id/reorder',
+  )
 
   if (existingMoveEndpoint) {
     throw new Error(
       `payload-nested-docs-page-tree cannot add the move endpoint to "${collection.slug}" because the collection already defines POST /:id/move.`,
+    )
+  }
+
+  if (existingReorderEndpoint) {
+    throw new Error(
+      `payload-nested-docs-page-tree cannot add the reorder endpoint to "${collection.slug}" because the collection already defines POST /:id/reorder.`,
     )
   }
 }
@@ -345,6 +355,16 @@ export const nestedDocsPageTreePlugin =
             diagnostics,
             parentFieldSlug,
           }),
+          ...(orderableFieldName
+            ? [
+                createReorderPageEndpoint({
+                  collectionSlug: collection.slug,
+                  diagnostics,
+                  orderableFieldName,
+                  parentFieldSlug,
+                }),
+              ]
+            : []),
         ],
         fields: collection.fields.map((field) =>
           patchBreadcrumbField({

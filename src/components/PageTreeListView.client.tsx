@@ -90,6 +90,35 @@ type PageTreeDragData = {
 
 type PageTreeSortableTransform = ReturnType<typeof useSortable>['transform']
 
+type PageTreeReorderRequestBody = {
+  docsToMove: string[]
+  frontendOrder?: PageTreeReorderFrontendOrder
+  newKeyWillBe: 'greater' | 'less'
+  orderableFieldName: string
+  target: {
+    id: string
+    key: null | string
+  }
+}
+
+type PageTreeReorderFrontendOrder = {
+  activeSlug: null | string
+  after: PageTreeReorderFrontendOrderEntry[]
+  before: PageTreeReorderFrontendOrderEntry[]
+  moveFromIndex: number
+  moveToIndex: number
+  newAfterRowSlug: null | string
+  newBeforeRowSlug: null | string
+  sort: null | string
+  targetSlug: null | string
+}
+
+type PageTreeReorderFrontendOrderEntry = {
+  index: number
+  orderKey: null | string
+  slug: null | string
+}
+
 type PageTreeIndexRange = {
   end: number
   start: number
@@ -114,6 +143,10 @@ function getRowDropID(rowID: string): string {
 
 function getSortableRowID(rowID: string): string {
   return `page-sort:${rowID}`
+}
+
+function getDiagnosticString(value: unknown): null | string {
+  return typeof value === 'string' && value.length > 0 ? value : null
 }
 
 function getPageTreeDragData(value: unknown): PageTreeDragData {
@@ -436,6 +469,100 @@ function buildOptimisticOrderRowIDs(args: {
   ]
 }
 
+function buildReorderRequestBody(args: {
+  activeRowID: string
+  docs: PageTreeDoc[]
+  orderableFieldName?: string
+  sort?: string
+  targetRowID: string
+}): null | PageTreeReorderRequestBody {
+  const { activeRowID, docs, orderableFieldName, sort, targetRowID } = args
+
+  if (!orderableFieldName || (sort !== orderableFieldName && sort !== `-${orderableFieldName}`)) {
+    return null
+  }
+
+  if (activeRowID === targetRowID) {
+    return null
+  }
+
+  const activeDoc = docs.find((doc) => doc.__pageTreeID === activeRowID)
+  const targetDoc = docs.find((doc) => doc.__pageTreeID === targetRowID)
+
+  if (!activeDoc || !targetDoc || activeDoc.__pageTreeParentID !== targetDoc.__pageTreeParentID) {
+    return null
+  }
+
+  const siblingDocs = docs.filter(
+    (doc) => doc.__pageTreeParentID === activeDoc.__pageTreeParentID,
+  )
+  const moveFromIndex = siblingDocs.findIndex((doc) => doc.__pageTreeID === activeRowID)
+  const moveToIndex = siblingDocs.findIndex((doc) => doc.__pageTreeID === targetRowID)
+
+  if (moveFromIndex < 0 || moveToIndex < 0 || moveFromIndex === moveToIndex) {
+    return null
+  }
+
+  const newBeforeRow =
+    moveToIndex > moveFromIndex ? siblingDocs[moveToIndex] : siblingDocs[moveToIndex - 1]
+  const newAfterRow =
+    moveToIndex > moveFromIndex ? siblingDocs[moveToIndex + 1] : siblingDocs[moveToIndex]
+  const target = newBeforeRow ?? newAfterRow
+
+  if (!target) {
+    return null
+  }
+
+  const getFrontendOrderEntry = (
+    doc: PageTreeDoc,
+    index: number,
+  ): PageTreeReorderFrontendOrderEntry => {
+    const orderKey = doc[orderableFieldName]
+
+    return {
+      slug: getDiagnosticString(doc.slug),
+      index,
+      orderKey: typeof orderKey === 'string' && orderKey.length > 0 ? orderKey : null,
+    }
+  }
+  const siblingDocsAfter = [...siblingDocs]
+  const [movedSiblingDoc] = siblingDocsAfter.splice(moveFromIndex, 1)
+
+  if (!movedSiblingDoc) {
+    return null
+  }
+
+  siblingDocsAfter.splice(moveToIndex, 0, movedSiblingDoc)
+
+  const targetKey = target[orderableFieldName]
+  const newKeyWillBe =
+    (newBeforeRow && sort === orderableFieldName) ||
+    (!newBeforeRow && sort === `-${orderableFieldName}`)
+      ? 'greater'
+      : 'less'
+
+  return {
+    docsToMove: [activeRowID],
+    frontendOrder: {
+      activeSlug: getDiagnosticString(activeDoc.slug),
+      after: siblingDocsAfter.map(getFrontendOrderEntry),
+      before: siblingDocs.map(getFrontendOrderEntry),
+      moveFromIndex,
+      moveToIndex,
+      newAfterRowSlug: newAfterRow ? getDiagnosticString(newAfterRow.slug) : null,
+      newBeforeRowSlug: newBeforeRow ? getDiagnosticString(newBeforeRow.slug) : null,
+      sort: sort ?? null,
+      targetSlug: getDiagnosticString(targetDoc.slug),
+    },
+    newKeyWillBe,
+    orderableFieldName,
+    target: {
+      id: target.__pageTreeID,
+      key: typeof targetKey === 'string' && targetKey.length > 0 ? targetKey : null,
+    },
+  }
+}
+
 function orderDocsByRowIDs(docs: PageTreeDoc[], orderRowIDs: null | string[]): PageTreeDoc[] {
   if (!orderRowIDs) {
     return docs
@@ -570,14 +697,14 @@ function ParentMoveToggle({
   return (
     <Pill
       aria-checked={enabled}
-      aria-label={`${enabled ? 'Hide' : 'Show'} parent move handles`}
+      aria-label={`${enabled ? 'Hide' : 'Show'} edit hierarchy handles`}
       className="pages-hierarchy-parent-move-toggle"
       id={`pages-hierarchy-parent-move-toggle-${collectionSlug}`}
       onClick={onToggle}
       pillStyle={enabled ? 'dark' : 'light'}
       size="small"
     >
-      Parent move
+      Edit Hierarchy
     </Pill>
   )
 }
@@ -1317,9 +1444,70 @@ export default function PageTreeListViewClient({
             docs: displayedPaginatedDocs,
             targetRowID: overDragData.rowID,
           })
+          const reorderRequestBody = buildReorderRequestBody({
+            activeRowID: rowID,
+            docs: displayedPaginatedDocs,
+            orderableFieldName,
+            sort: currentSort,
+            targetRowID: overDragData.rowID,
+          })
 
-          if (nextOrderRowIDs) {
-            setOptimisticOrderRowIDs(nextOrderRowIDs)
+          if (!nextOrderRowIDs || !reorderRequestBody) {
+            return
+          }
+
+          const apiRoute = config.routes.api
+          const params = new URLSearchParams()
+
+          if (locale?.code) {
+            params.set('locale', locale.code)
+          }
+
+          setOptimisticOrderRowIDs(nextOrderRowIDs)
+          setPendingMoveRowID(rowID)
+
+          try {
+            const response = await fetch(
+              `${apiRoute}/${props.collectionSlug}/${encodeURIComponent(rowID)}/reorder${
+                params.size > 0 ? `?${params.toString()}` : ''
+              }`,
+              {
+                body: JSON.stringify(reorderRequestBody),
+                credentials: 'include',
+                headers: {
+                  'Accept-Language': i18n.language,
+                  'Content-Type': 'application/json',
+                },
+                method: 'POST',
+              },
+            )
+            const result = (await response.json().catch(() => null)) as {
+              message?: string
+            } | null
+
+            if (!response.ok) {
+              setOptimisticOrderRowIDs(null)
+              toast.error(result?.message ?? 'Could not reorder document.')
+              return
+            }
+
+            if (result?.message === 'initial migration') {
+              setOptimisticOrderRowIDs(null)
+            }
+
+            React.startTransition(() => {
+              router.refresh()
+            })
+          } catch (error) {
+            const message =
+              error instanceof Error && error.message
+                ? error.message
+                : 'Could not reorder document.'
+
+            setOptimisticOrderRowIDs(null)
+            toast.error(message)
+          } finally {
+            setPendingMoveRowID(null)
           }
         }
 
@@ -1406,9 +1594,11 @@ export default function PageTreeListViewClient({
     [
       allDocsByID,
       config.routes.api,
+      currentSort,
       displayedPaginatedDocs,
       i18n.language,
       locale?.code,
+      orderableFieldName,
       paginatedDocsByID,
       props.collectionSlug,
       router,

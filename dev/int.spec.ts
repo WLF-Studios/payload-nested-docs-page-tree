@@ -57,6 +57,18 @@ async function getPagesMoveEndpoint() {
   return moveEndpoint
 }
 
+async function getPagesReorderEndpoint() {
+  const reorderEndpoint = payload.collections.pages.config.endpoints?.find(
+    (endpoint) => endpoint.path === '/:id/reorder' && endpoint.method === 'post',
+  )
+
+  if (!reorderEndpoint) {
+    throw new Error('Could not resolve the pages reorder endpoint')
+  }
+
+  return reorderEndpoint
+}
+
 async function getSeedUser() {
   const { docs } = await payload.find({
     collection: 'users',
@@ -164,6 +176,65 @@ async function invokeMove(args: {
   return moveEndpoint.handler(payloadRequest)
 }
 
+async function invokeReorder(args: {
+  locale?: string
+  movedID: number | string
+  newKeyWillBe: 'greater' | 'less'
+  targetID: number | string
+  targetKey: null | string
+  user?: Record<string, unknown>
+}) {
+  const { locale, movedID, newKeyWillBe, targetID, targetKey, user } = args
+  const reorderEndpoint = await getPagesReorderEndpoint()
+  const request = new Request(
+    `http://localhost:3000/api/pages/${movedID}/reorder${locale ? `?locale=${locale}` : ''}`,
+    {
+      body: JSON.stringify({
+        docsToMove: [String(movedID)],
+        newKeyWillBe,
+        orderableFieldName: '_order',
+        target: {
+          id: String(targetID),
+          key: targetKey,
+        },
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    },
+  )
+  const payloadRequest = (await createPayloadRequest({
+    config,
+    request,
+  })) as PayloadRequest & {
+    routeParams?: Record<string, string>
+  }
+
+  payloadRequest.routeParams = { id: String(movedID) }
+
+  if (user) {
+    payloadRequest.user = user as never
+  }
+
+  return reorderEndpoint.handler(payloadRequest)
+}
+
+async function countPageVersions(id: number | string) {
+  const versions = await payload.findVersions({
+    collection: 'pages',
+    limit: 0,
+    overrideAccess: true,
+    where: {
+      parent: {
+        equals: id,
+      },
+    },
+  } as never)
+
+  return versions.totalDocs
+}
+
 describe('nestedDocsPageTreePlugin integration', () => {
   test('patches each targeted collection with the tree list view and move endpoint', async () => {
     const pagesCollection = payload.collections.pages.config
@@ -196,6 +267,11 @@ describe('nestedDocsPageTreePlugin integration', () => {
     expect(
       pagesCollection.endpoints?.some(
         (endpoint) => endpoint.method === 'post' && endpoint.path === '/:id/move',
+      ),
+    ).toBe(true)
+    expect(
+      pagesCollection.endpoints?.some(
+        (endpoint) => endpoint.method === 'post' && endpoint.path === '/:id/reorder',
       ),
     ).toBe(true)
 
@@ -293,6 +369,106 @@ describe('nestedDocsPageTreePlugin integration', () => {
 
     expect(response.status).toBe(200)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  test('reorders published pages silently without changing status or version history', async () => {
+    const user = await getSeedUser()
+    const first = await createPublishedPage({
+      slug: 'reorder-published-first',
+      title: 'Reorder Published First',
+    })
+    const second = await createPublishedPage({
+      slug: 'reorder-published-second',
+      title: 'Reorder Published Second',
+    })
+    const firstVersionCount = await countPageVersions(first.id)
+    const fetchMock = mockDeployHookFetch()
+
+    const response = await invokeReorder({
+      locale: 'en',
+      movedID: first.id,
+      newKeyWillBe: 'greater',
+      targetID: second.id,
+      targetKey: typeof second._order === 'string' ? second._order : null,
+      user,
+    })
+
+    expect(response.status).toBe(200)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(await countPageVersions(first.id)).toBe(firstVersionCount)
+
+    const firstAfter = await payload.findByID({
+      collection: 'pages',
+      depth: 0,
+      draft: false,
+      id: first.id,
+      overrideAccess: true,
+    })
+    const secondAfter = await payload.findByID({
+      collection: 'pages',
+      depth: 0,
+      draft: false,
+      id: second.id,
+      overrideAccess: true,
+    })
+
+    expect(firstAfter._status).toBe('published')
+    expect(secondAfter._status).toBe('published')
+    expect(String(firstAfter._order) > String(secondAfter._order)).toBe(true)
+  })
+
+  test('reorders changed pages without dropping their changed draft state', async () => {
+    const user = await getSeedUser()
+    const changed = await createPublishedPage({
+      slug: 'reorder-changed-page',
+      title: 'Reorder Changed Page',
+    })
+    const target = await createPublishedPage({
+      slug: 'reorder-changed-target',
+      title: 'Reorder Changed Target',
+    })
+
+    await payload.update({
+      collection: 'pages',
+      data: {
+        title: 'Reorder Changed Page Draft',
+      },
+      draft: true,
+      id: changed.id,
+      overrideAccess: true,
+    })
+
+    const changedDraftBefore = await readPage(changed.id, 'en')
+    const changedVersionCount = await countPageVersions(changed.id)
+
+    const response = await invokeReorder({
+      locale: 'en',
+      movedID: changed.id,
+      newKeyWillBe: 'greater',
+      targetID: target.id,
+      targetKey: typeof target._order === 'string' ? target._order : null,
+      user,
+    })
+
+    expect(response.status).toBe(200)
+    expect(await countPageVersions(changed.id)).toBe(changedVersionCount)
+
+    const changedCurrent = await payload.findByID({
+      collection: 'pages',
+      depth: 0,
+      draft: false,
+      id: changed.id,
+      overrideAccess: true,
+    })
+    const changedDraft = await readPage(changed.id, 'en')
+    const targetDraft = await readPage(target.id, 'en')
+
+    expect(changedCurrent._status).toBe('published')
+    expect(changedCurrent.title).toBe('Reorder Changed Page')
+    expect(changedDraft._status).toBe('draft')
+    expect(changedDraft.title).toBe('Reorder Changed Page Draft')
+    expect(changedDraftBefore._order).not.toBe(changedDraft._order)
+    expect(String(changedDraft._order) > String(targetDraft._order)).toBe(true)
   })
 
   test('triggers the Cloudflare deploy hook when a published page is deleted', async () => {

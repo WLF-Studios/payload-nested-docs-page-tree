@@ -249,6 +249,11 @@ describe('nestedDocsPageTreePlugin', () => {
 
     expect(disabledConfig.collections?.[0]?.hooks?.afterChange).toBeUndefined()
     expect(enabledConfig.collections?.[0]?.hooks?.afterChange).toHaveLength(1)
+    expect(
+      getCollectionEndpoints(enabledConfig.collections?.[0]).some(
+        (endpoint) => endpoint.method === 'post' && endpoint.path === '/:id/reorder',
+      ),
+    ).toBe(true)
   })
 
   it('returns the original config when the plugin is disabled', () => {
@@ -364,5 +369,19 @@ describe('nestedDocsPageTreePlugin', () => {
         ]),
       ),
     ).toThrow('cannot add the move endpoint to "pages"')
+
+    expect(() =>
+      nestedDocsPageTreePlugin({
+        collections: ['pages'],
+      })(
+        buildConfig([
+          buildCollection({
+            endpointPath: '/:id/reorder',
+            orderable: true,
+            slug: 'pages',
+          }),
+        ]),
+      ),
+    ).toThrow('cannot add the reorder endpoint to "pages"')
   })
 })

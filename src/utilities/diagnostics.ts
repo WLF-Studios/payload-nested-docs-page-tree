@@ -18,6 +18,11 @@ export type NestedDocsPageTreePluginDiagnosticEvent = {
     | 'move-endpoint:snapshot-before'
     | 'page-tree-change:after'
     | 'page-tree-change:status-flip'
+    | 'reorder-endpoint:body-rejected'
+    | 'reorder-endpoint:enter'
+    | 'reorder-endpoint:error'
+    | 'reorder-endpoint:initial-migration'
+    | 'reorder-endpoint:ok'
   /** ISO timestamp; included so log dumps are self-describing. */
   t: string
 }
