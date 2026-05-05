@@ -146,7 +146,7 @@ test('renders the seeded page tree with the expected columns and mixed statuses'
   expect(visibleHeaders).toEqual(['Title', 'Published', 'Updated At', 'Parent', 'Slug', 'Status'])
 })
 
-test('renders the orderable page tree with manual order controls but without Payload drag handles', async ({
+test('renders the orderable page tree without manual order controls', async ({
   page,
 }) => {
   await loginAsSeedUser(page)
@@ -156,34 +156,14 @@ test('renders the orderable page tree with manual order controls but without Pay
   await expect(page.locator('.pages-hierarchy-table')).toBeVisible({
     timeout: 20_000,
   })
-  await expect(page.locator('.pages-hierarchy-table')).toHaveAttribute(
+  await expect(page.locator('.pages-hierarchy-table')).not.toHaveAttribute(
     'data-page-tree-orderable',
     'true',
   )
-
-  const orderHeading = page.locator('#heading-_dragHandle')
-  const orderButton = page.getByRole('button', {
-    name: 'Sort by Order Ascending',
-  })
-
-  await expect(orderHeading).toBeVisible()
-  await expect(orderButton).toBeVisible()
-  await expect(orderButton).not.toHaveClass(/sort-header--active/)
-  const headingIDs = await page
-    .locator('.pages-hierarchy-table thead th')
-    .evaluateAll((headings) => headings.map((heading) => heading.id))
-  const selectHeadingIndex = headingIDs.indexOf('heading-_select')
-
-  expect(selectHeadingIndex).toBeGreaterThanOrEqual(0)
-  expect(headingIDs.indexOf('heading-_dragHandle')).toBe(selectHeadingIndex + 1)
+  await expect(page.locator('#heading-_dragHandle')).toHaveCount(0)
   await expect(page.locator(".pages-hierarchy-table tbody tr .cell-_dragHandle [role='button']")).toHaveCount(
     0,
   )
-
-  await orderButton.click()
-
-  await expect(page).toHaveURL(/sort=_order/)
-  await expect(orderButton).toHaveClass(/sort-header--active/)
   await expect(page.locator('.pages-hierarchy-cell__drag-handle').first()).toBeVisible()
   await expect(page.locator('.pages-hierarchy-cell__toggle').first()).toBeVisible()
 
@@ -195,7 +175,7 @@ test('renders the orderable page tree with manual order controls but without Pay
   await expect(dataRows.getByRole('link', { name: 'Leadership', exact: true })).toHaveCount(1)
 })
 
-test('orderable page tree reorders root pages from the title drag handle in manual order mode', async ({
+test('orderable page tree rejects same-parent reordering from the title drag handle', async ({
   page,
 }) => {
   await loginAsSeedUser(page)
@@ -218,17 +198,18 @@ test('orderable page tree reorders root pages from the title drag handle in manu
   const reorderResponsePromise = page.waitForResponse(
     (response) =>
       response.url().includes('/api/reorder') && response.request().method() === 'POST',
-  )
+    { timeout: 1000 },
+  ).catch(() => null)
 
   await dragTitleHandleToRow(page, sourceTitle, targetTitle, 'top')
 
   const reorderResponse = await reorderResponsePromise
 
-  expect(reorderResponse.ok()).toBe(true)
-  await expect(page.getByText('Document is already at the root.')).toHaveCount(0)
+  expect(reorderResponse).toBeNull()
+  await expect(page.getByText('Document is already at the root.')).toBeVisible()
 })
 
-test('orderable page tree moves and reorders cross-parent title drags in manual order mode', async ({
+test('orderable page tree allows cross-parent title drags without reordering', async ({
   page,
 }) => {
   await loginAsSeedUser(page)
@@ -248,7 +229,8 @@ test('orderable page tree moves and reorders cross-parent title drags in manual 
   const reorderResponsePromise = page.waitForResponse(
     (response) =>
       response.url().includes('/api/reorder') && response.request().method() === 'POST',
-  )
+    { timeout: 1000 },
+  ).catch(() => null)
 
   await dragTitleHandleToRow(page, 'Pricing', 'About', 'center')
 
@@ -256,6 +238,6 @@ test('orderable page tree moves and reorders cross-parent title drags in manual 
   const reorderResponse = await reorderResponsePromise
 
   expect(moveResponse.ok()).toBe(true)
-  expect(reorderResponse.ok()).toBe(true)
+  expect(reorderResponse).toBeNull()
   await expect(page.getByText('Document is already at the root.')).toHaveCount(0)
 })
