@@ -119,7 +119,7 @@ export async function readMainRowSnapshot(args: {
       draft: false,
       overrideAccess: true,
       req,
-    } as never)) as null | Record<string, unknown>
+    } as never)) as unknown as null | Record<string, unknown>
 
     if (!doc) {
       return null

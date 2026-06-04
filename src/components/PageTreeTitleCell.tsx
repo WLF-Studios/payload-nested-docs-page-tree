@@ -40,6 +40,26 @@ function ParentMoveHandleIcon() {
   )
 }
 
+function HomeIndicatorIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="pages-hierarchy-cell__home-icon"
+      fill="none"
+      height="14"
+      viewBox="0 0 14 14"
+      width="14"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M2.5 7L7 3L11.5 7V13.5H2.5V7Z"
+        stroke="currentColor"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export function PageTreeTitleCell({
   children,
   doc,
@@ -166,7 +186,10 @@ export function PageTreeTitleCell({
           <ParentMoveHandleIcon />
         </button>
       ) : null}
-      <span className="pages-hierarchy-cell__content">{children}</span>
+      <span className="pages-hierarchy-cell__content">
+        {showHomeIcon ? <HomeIndicatorIcon /> : null}
+        {children}
+      </span>
     </div>
   )
 }

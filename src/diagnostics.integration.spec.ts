@@ -70,7 +70,7 @@ async function createPage(title: string): Promise<Record<string, unknown>> {
     data: { title },
     disableTransaction: true,
     overrideAccess: true,
-  } as never) as Promise<Record<string, unknown>>
+  } as never) as unknown as Promise<Record<string, unknown>>
 }
 
 async function invokePageTreeMove(args: {

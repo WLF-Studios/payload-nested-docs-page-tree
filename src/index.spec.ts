@@ -42,7 +42,7 @@ function buildCollection(args: {
   if (includeParent) {
     fields.push({
       name: parentFieldSlug,
-      relationTo: slug,
+      relationTo: slug as never,
       type: 'relationship',
     })
   }
@@ -174,7 +174,7 @@ describe('nestedDocsPageTreePlugin', () => {
 
   it('does not enable the home indicator for non-pages collections by default', () => {
     const config = nestedDocsPageTreePlugin({
-      collections: ['categories'],
+      collections: ['categories' as never],
     })(buildConfig([buildCollection({ slug: 'categories' })]))
 
     expect(config.collections?.[0]?.custom?.nestedDocsPageTreePlugin).toMatchObject({
@@ -186,9 +186,9 @@ describe('nestedDocsPageTreePlugin', () => {
 
   it('uses configured home indicator collections as an exact allow-list', () => {
     const config = nestedDocsPageTreePlugin({
-      collections: ['pages', 'page-tree'],
+      collections: ['pages', 'page-tree' as never],
       homeIndicator: {
-        collections: ['page-tree'],
+        collections: ['page-tree' as never],
       },
     })(
       buildConfig([

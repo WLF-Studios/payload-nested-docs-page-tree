@@ -338,7 +338,7 @@ async function readBackendSiblingOrder(args: {
       where: parentScopeWhere as never,
     } as never)
 
-    return (result.docs as PageTreeSourceDoc[]).map((doc, index) =>
+    return (result.docs as unknown as PageTreeSourceDoc[]).map((doc, index) =>
       getBackendOrderEntry({
         doc,
         index,
@@ -543,12 +543,12 @@ async function initializeMissingOrderKeys(args: {
     ]) as never,
   } as never)
   const lastOrderValue = getOrderableKey(
-    existingOrderedDocs.docs[0] as PageTreeSourceDoc | undefined,
+    existingOrderedDocs.docs[0] as unknown as PageTreeSourceDoc | undefined,
     orderableFieldName,
   )
   const orderValues = generateNKeysBetween(lastOrderValue, null, missingOrderDocs.docs.length)
 
-  for (const [index, doc] of (missingOrderDocs.docs as PageTreeSourceDoc[]).entries()) {
+  for (const [index, doc] of (missingOrderDocs.docs as unknown as PageTreeSourceDoc[]).entries()) {
     const docID = doc.id
     const orderValue = orderValues[index]
 
@@ -684,7 +684,10 @@ export function createReorderPageEndpoint(args: {
         },
       } as never)
       const docsByID = new Map(
-        (relatedDocsResult.docs as PageTreeSourceDoc[]).map((doc) => [stringifyDocID(doc.id), doc]),
+        (relatedDocsResult.docs as unknown as PageTreeSourceDoc[]).map((doc) => [
+          stringifyDocID(doc.id),
+          doc,
+        ]),
       )
       const movedDoc = docsByID.get(movedIDFromRoute)
       const targetDoc = docsByID.get(body.target.id)
@@ -779,7 +782,7 @@ export function createReorderPageEndpoint(args: {
         ]) as never,
       } as never)
       const adjacentDocKey = getOrderableKey(
-        adjacentDoc.docs[0] as PageTreeSourceDoc | undefined,
+        adjacentDoc.docs[0] as unknown as PageTreeSourceDoc | undefined,
         orderableFieldName,
       )
       const movedDocKey = getOrderableKey(movedDoc, orderableFieldName)

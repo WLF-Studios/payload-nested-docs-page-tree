@@ -1,4 +1,4 @@
-import type { Payload, PayloadRequest } from 'payload'
+import type { Endpoint, Payload, PayloadRequest } from 'payload'
 
 import config from '@payload-config'
 import { createPayloadRequest, getPayload } from 'payload'
@@ -10,6 +10,9 @@ import { getRelationshipID } from '../src/utilities/pageTree.js'
 
 let payload: Payload
 const originalDeployHookURL = process.env.CLOUDFLARE_DEPLOY_HOOK_URL
+
+type DevLocale = 'de' | 'en'
+type TestRequestUser = NonNullable<PayloadRequest['user']>
 
 afterAll(async () => {
   await payload.destroy()
@@ -45,10 +48,26 @@ function mockDeployHookFetch() {
   return fetchMock
 }
 
+function hasEndpoint(
+  endpoints: false | Endpoint[] | undefined,
+  predicate: (endpoint: Endpoint) => boolean,
+): boolean {
+  return Array.isArray(endpoints) && endpoints.some(predicate)
+}
+
+function getFieldHiddenValue(field: unknown): boolean | undefined {
+  if (!field || typeof field !== 'object' || !('admin' in field)) {
+    return undefined
+  }
+
+  return (field as { admin?: { hidden?: boolean } }).admin?.hidden
+}
+
 async function getPagesMoveEndpoint() {
-  const moveEndpoint = payload.collections.pages.config.endpoints?.find(
-    (endpoint) => endpoint.path === '/:id/move' && endpoint.method === 'post',
-  )
+  const endpoints = payload.collections.pages.config.endpoints
+  const moveEndpoint = Array.isArray(endpoints)
+    ? endpoints.find((endpoint) => endpoint.path === '/:id/move' && endpoint.method === 'post')
+    : undefined
 
   if (!moveEndpoint) {
     throw new Error('Could not resolve the pages move endpoint')
@@ -58,9 +77,10 @@ async function getPagesMoveEndpoint() {
 }
 
 async function getPagesReorderEndpoint() {
-  const reorderEndpoint = payload.collections.pages.config.endpoints?.find(
-    (endpoint) => endpoint.path === '/:id/reorder' && endpoint.method === 'post',
-  )
+  const endpoints = payload.collections.pages.config.endpoints
+  const reorderEndpoint = Array.isArray(endpoints)
+    ? endpoints.find((endpoint) => endpoint.path === '/:id/reorder' && endpoint.method === 'post')
+    : undefined
 
   if (!reorderEndpoint) {
     throw new Error('Could not resolve the pages reorder endpoint')
@@ -90,7 +110,7 @@ async function getSeedUser() {
 }
 
 async function createPage(args: {
-  locale?: string
+  locale?: DevLocale
   parent?: null | string
   slug: string
   title: string
@@ -131,7 +151,7 @@ async function createPublishedPage(args: {
   })
 }
 
-async function readPage(id: number | string, locale: string) {
+async function readPage(id: number | string, locale: DevLocale) {
   return payload.findByID({
     collection: 'pages',
     depth: 0,
@@ -143,10 +163,10 @@ async function readPage(id: number | string, locale: string) {
 }
 
 async function invokeMove(args: {
-  locale?: string
+  locale?: DevLocale
   movedID: number | string
   parentID: null | string
-  user?: Record<string, unknown>
+  user?: TestRequestUser
 }) {
   const { locale, movedID, parentID, user } = args
   const moveEndpoint = await getPagesMoveEndpoint()
@@ -177,12 +197,12 @@ async function invokeMove(args: {
 }
 
 async function invokeReorder(args: {
-  locale?: string
+  locale?: DevLocale
   movedID: number | string
   newKeyWillBe: 'greater' | 'less'
   targetID: number | string
   targetKey: null | string
-  user?: Record<string, unknown>
+  user?: TestRequestUser
 }) {
   const { locale, movedID, newKeyWillBe, targetID, targetKey, user } = args
   const reorderEndpoint = await getPagesReorderEndpoint()
@@ -246,7 +266,8 @@ describe('nestedDocsPageTreePlugin integration', () => {
       'payload-cloudflare-build-status/client#CloudflareBuildStatus',
     )
     expect(
-      payload.config.endpoints?.some(
+      hasEndpoint(
+        payload.config.endpoints,
         (endpoint) => endpoint.method === 'get' && endpoint.path === '/cloudflare-build-status',
       ),
     ).toBe(true)
@@ -265,12 +286,14 @@ describe('nestedDocsPageTreePlugin integration', () => {
       parentFieldSlug: 'parent',
     })
     expect(
-      pagesCollection.endpoints?.some(
+      hasEndpoint(
+        pagesCollection.endpoints,
         (endpoint) => endpoint.method === 'post' && endpoint.path === '/:id/move',
       ),
     ).toBe(true)
     expect(
-      pagesCollection.endpoints?.some(
+      hasEndpoint(
+        pagesCollection.endpoints,
         (endpoint) => endpoint.method === 'post' && endpoint.path === '/:id/reorder',
       ),
     ).toBe(true)
@@ -279,9 +302,7 @@ describe('nestedDocsPageTreePlugin integration', () => {
       (field) => 'name' in field && field.name === 'breadcrumbs',
     )
 
-    expect(
-      breadcrumbsField && 'admin' in breadcrumbsField ? breadcrumbsField.admin?.hidden : undefined,
-    ).toBe(true)
+    expect(getFieldHiddenValue(breadcrumbsField)).toBe(true)
   })
 
   test('triggers the Cloudflare deploy hook for published create and update', async () => {

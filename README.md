@@ -3,10 +3,10 @@
 Companion admin plugin for [`@payloadcms/plugin-nested-docs`](https://payloadcms.com/docs/plugins/nested-docs).
 
 <p align="center">
-  <img alt="Page tree demo" src="assets/page-tree.gif" width="100%" />
+  <img alt="Page tree admin overview" src="assets/page-tree-admin-overview.png" width="100%" />
 </p>
 
-Adds a nested tree list view for nested docs collections in Payload admin, with drag-and-drop parent changes and status badges for published / changed / draft documents.
+Adds a nested tree list view for nested docs collections in Payload admin, with visual hierarchy shading, live URL path previews, separate reorder and parent-move interactions, and status badges for published / changed / draft documents.
 
 It works alongside `@payloadcms/plugin-nested-docs`. It does not replace nested docs persistence, breadcrumbs generation, or routing.
 
@@ -43,7 +43,7 @@ export const plugins = [
 ]
 ```
 
-If needed, refresh the admin import map:
+Refresh the admin import map:
 
 ```bash
 payload generate:importmap
@@ -52,10 +52,54 @@ payload generate:importmap
 ## What It Adds
 
 - replaces the collection list view with a nested tree table
+- adds visual hierarchy shading for nested pages
+- shows the live URL path for each page
 - preserves sorting, filters, pagination, bulk selection, and row actions
-- adds `POST /:id/move` for drag-and-drop parent changes
+- adds `POST /:id/move` for intentional parent changes
+- adds `POST /:id/reorder` for orderable-only sibling reordering
+- keeps reorder drags scoped to the same parent or root level
 - marks the root page with slug `home` using a home icon on the title link
 - hides the read-only breadcrumbs field by default
+
+## Feature Preview
+
+### Visual hierarchy shading
+
+<p align="center">
+  <img alt="Visual hierarchy shading for nested pages" src="assets/visual-hierarchy-shading.png" width="100%" />
+</p>
+
+### Homepage icon
+
+<p align="center">
+  <img alt="Homepage icon in the page tree" src="assets/homepage-icon.png" width="100%" />
+</p>
+
+### Live URL path preview
+
+<p align="center">
+  <img alt="Live URL path preview in the page tree" src="assets/live-url-path-preview.png" width="100%" />
+</p>
+
+## Drag-And-Drop Modes
+
+Parent moves and orderable reordering are separate interactions.
+
+For collections using Payload `orderable`, the reorder handle is shown only when the current sort is the orderable field. Reordering only changes the order key and is limited to documents under the same parent, or documents at the root level. A reorder drag cannot change a document's parent.
+
+[Watch the orderable-only reorder handle demo](assets/orderable-reorder-handle.mp4)
+
+Parent moves are hidden by default because they change the page hierarchy. Editors can enable the parent-move handle with the `Edit Hierarchy` button when they intentionally want to move pages between parents. Drag a page onto another page to make it a child of that page. Drag it between root pages to move it back to the root level.
+
+[Watch the edit hierarchy mode demo](assets/edit-hierarchy-mode.mp4)
+
+[Watch the parent move to child demo](assets/parent-move-to-child.mp4)
+
+[Watch the parent move back to root demo](assets/parent-move-to-root.mp4)
+
+[Watch the same-parent reorder guard demo](assets/reorder-same-parent-only.mp4)
+
+Internally, parent moves call this plugin's `/:id/move` endpoint. That endpoint updates the nested docs parent field through Payload's local API, while `@payloadcms/plugin-nested-docs` continues to own parent and breadcrumb behavior through its normal fields and hooks.
 
 ## Home Indicator
 
@@ -95,30 +139,33 @@ The tree view supports three document states:
 - `changed`: live, but has unpublished changes
 - `draft`: not published
 
-Badge colors use Payload theme tokens by default. To override badge labels or colors, pass a
-`badges` object:
+Badge colors use Payload theme colors by default. To override badge labels or status colors, pass a `badges` object. Custom colors are treated as one base color per status and are adapted for both light and dark Payload themes:
+
+<p align="center">
+  <img alt="Custom status badges in the page tree" src="assets/custom-status-badges.png" width="100%" />
+</p>
 
 ```ts
 nestedDocsPageTreePlugin({
   collections: ['pages'],
   badges: {
-    labels: {
-      published: 'Live',
-      changed: 'Has Changes',
-      draft: 'Draft Only',
-    },
     colors: {
-      // Example: use a custom green / orange / yellow palette.
+      // Example: use a custom green / blue / orange palette.
       published: '#bbf3b0',
       changed: '#b9eaf3',
       draft: '#f8d5a7',
+    },
+    labels: {
+      // Example: use custom labels for states.
+      published: 'Live',
+      changed: 'Has Changes',
+      draft: 'Draft Only',
     },
   },
 }),
 ```
 
-`labels` and `colors` are optional partial overrides. Missing entries fall back to the built-in
-Payload-themed defaults.
+`labels` and `colors` are optional partial overrides. Missing entries fall back to the built-in Payload-themed defaults for published, changed, and draft states.
 
 ## Configuration
 
@@ -134,7 +181,11 @@ Payload-themed defaults.
 
 ## Diagnostics Mode
 
-If a drag-and-drop move is doing something unexpected to publish state, enable diagnostics and reproduce. Each page-tree-triggered write emits one or more structured events on the dev server stdout:
+If a page-tree move or reorder is doing something unexpected, enable diagnostics and reproduce. Each page-tree-triggered write emits one or more structured events on the dev server stdout:
+
+<p align="center">
+  <img alt="Diagnostics mode structured logs" src="assets/diagnostics-mode-logs.png" width="100%" />
+</p>
 
 ```ts
 nestedDocsPageTreePlugin({
@@ -155,15 +206,15 @@ nestedDocsPageTreePlugin({
 })
 ```
 
-Each event is one line tagged `[payload-nested-docs-page-tree]` followed by the event source (`move-endpoint:enter`, `move-endpoint:ok`, `move-endpoint:error`, `page-tree-change:after`, `page-tree-change:status-flip`) and a JSON payload that includes:
+Each event is one line tagged `[payload-nested-docs-page-tree]` followed by the event source (`move-endpoint:enter`, `move-endpoint:ok`, `move-endpoint:error`, `reorder-endpoint:enter`, `reorder-endpoint:ok`, `reorder-endpoint:error`, `page-tree-change:after`, `page-tree-change:status-flip`) and a JSON payload that includes:
 
-- `flow`: id shared by every event for one logical move
+- `flow`: id shared by every event for one logical operation
 - `publishedMainRowBefore` / `publishedMainRowAfter`: fresh reads of the public/published row (`draft: false`)
 - `before` / `after` / `changed`: projected diffs for `_status`, the parent field, and the orderable field when present
 
 If the published main row goes from `published` to anything else as a result of a page-tree change, the plugin additionally emits a `page-tree-change:status-flip` WARN line.
 
-Diagnostics is opt-in and adds extra reads per move. Leave it off in production unless you are actively investigating.
+Diagnostics is opt-in and adds extra reads per operation. Leave it off in production unless you are actively investigating.
 
 ## Drag-And-Drop Is Triggering A Deploy?
 
