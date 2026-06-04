@@ -103,11 +103,13 @@ https://github.com/user-attachments/assets/4cb25109-e515-4955-8503-39fddac0020f
 
 Parent move back to root
 
-https://github.com/user-attachments/assets/45764f1a-1ab6-4308-ab7a-6770924d05fd
+https://github.com/user-attachments/assets/470cb5b3-61c8-4b5b-a6e4-5e855f58a0e4
 
 Same-parent reorder guard
 
-https://github.com/user-attachments/assets/470cb5b3-61c8-4b5b-a6e4-5e855f58a0e4
+https://github.com/user-attachments/assets/2513ff04-192e-4fdf-808f-6004f55d871c
+
+
 
 
 Internally, parent moves call this plugin's `/:id/move` endpoint. That endpoint updates the nested docs parent field through Payload's local API, while `@payloadcms/plugin-nested-docs` continues to own parent and breadcrumb behavior through its normal fields and hooks.
