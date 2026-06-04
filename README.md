@@ -87,17 +87,28 @@ Parent moves and orderable reordering are separate interactions.
 
 For collections using Payload `orderable`, the reorder handle is shown only when the current sort is the orderable field. Reordering only changes the order key and is limited to documents under the same parent, or documents at the root level. A reorder drag cannot change a document's parent.
 
-[Watch the orderable-only reorder handle demo](assets/orderable-reorder-handle.mp4)
+https://github.com/user-attachments/assets/b25ffa1a-a6bd-45cf-bce8-56ba6cdf7e72
+
+
 
 Parent moves are hidden by default because they change the page hierarchy. Editors can enable the parent-move handle with the `Edit Hierarchy` button when they intentionally want to move pages between parents. Drag a page onto another page to make it a child of that page. Drag it between root pages to move it back to the root level.
 
-[Watch the edit hierarchy mode demo](assets/edit-hierarchy-mode.mp4)
+Edit hierarchy mode
 
-[Watch the parent move to child demo](assets/parent-move-to-child.mp4)
+https://github.com/user-attachments/assets/618d5e53-5918-40be-9932-0f516e5e82ba
 
-[Watch the parent move back to root demo](assets/parent-move-to-root.mp4)
+Parent move to child
 
-[Watch the same-parent reorder guard demo](assets/reorder-same-parent-only.mp4)
+https://github.com/user-attachments/assets/4cb25109-e515-4955-8503-39fddac0020f
+
+Parent move back to root
+
+https://github.com/user-attachments/assets/45764f1a-1ab6-4308-ab7a-6770924d05fd
+
+Same-parent reorder guard
+
+https://github.com/user-attachments/assets/470cb5b3-61c8-4b5b-a6e4-5e855f58a0e4
+
 
 Internally, parent moves call this plugin's `/:id/move` endpoint. That endpoint updates the nested docs parent field through Payload's local API, while `@payloadcms/plugin-nested-docs` continues to own parent and breadcrumb behavior through its normal fields and hooks.
 
