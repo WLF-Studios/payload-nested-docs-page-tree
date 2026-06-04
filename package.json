@@ -5,7 +5,6 @@
   "license": "MIT",
   "author": "WLF Studios",
   "type": "module",
-  "packageManager": "pnpm@11.5.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/WLF-Studios/payload-nested-docs-page-tree.git"

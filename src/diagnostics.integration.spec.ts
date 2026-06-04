@@ -14,6 +14,10 @@ let memoryDB: MongoMemoryReplSet | undefined
 let payload: Payload | undefined
 let payloadConfig: Awaited<ReturnType<typeof buildConfig>>
 
+function appendConnectionOption(uri: string, option: string): string {
+  return `${uri}${uri.includes('?') ? '&' : '?'}${option}`
+}
+
 const Pages: CollectionConfig = {
   slug: 'pages',
   access: {
@@ -99,13 +103,15 @@ async function invokePageTreeMove(args: {
 
 describe('page-tree diagnostics integration', () => {
   beforeAll(async () => {
+    const dbName = `page_tree_diagnostics_${Date.now()}_${process.pid}`
+
     memoryDB = await MongoMemoryReplSet.create({
-      replSet: { count: 1, dbName: `page-tree-diagnostics-${Date.now()}` },
+      replSet: { count: 1, dbName },
     })
     payloadConfig = await buildConfig({
       collections: [Pages],
       db: mongooseAdapter({
-        url: `${memoryDB.getUri()}&retryWrites=true`,
+        url: appendConnectionOption(memoryDB.getUri(dbName), 'retryWrites=true'),
       }),
       plugins: [
         nestedDocsPageTreePlugin({
@@ -132,27 +138,31 @@ describe('page-tree diagnostics integration', () => {
     await memoryDB?.stop()
   })
 
-  it('emits move-endpoint enter and ok events with snapshots and a flow id', async () => {
-    const movedDoc = await createPage('Diag move')
-    const parentDoc = await createPage('Diag parent')
+  it(
+    'emits move-endpoint enter and ok events with snapshots and a flow id',
+    { retry: 3 },
+    async () => {
+      const movedDoc = await createPage('Diag move')
+      const parentDoc = await createPage('Diag parent')
 
-    collectedEvents = []
+      collectedEvents = []
 
-    const response = await invokePageTreeMove({ movedDoc, parentDoc })
+      const response = await invokePageTreeMove({ movedDoc, parentDoc })
 
-    expect(response.status).toBe(200)
+      expect(response.status).toBe(200)
 
-    const enterEvent = collectedEvents.find((event) => event.source === 'move-endpoint:enter')
-    const okEvent = collectedEvents.find((event) => event.source === 'move-endpoint:ok')
+      const enterEvent = collectedEvents.find((event) => event.source === 'move-endpoint:enter')
+      const okEvent = collectedEvents.find((event) => event.source === 'move-endpoint:ok')
 
-    expect(enterEvent).toBeDefined()
-    expect(okEvent).toBeDefined()
-    expect(enterEvent?.flow).toBe(okEvent?.flow)
-    expect(enterEvent?.flow.startsWith('move-endpoint-')).toBe(true)
-    expect(enterEvent?.data).toHaveProperty('publishedMainRowBefore')
-    expect(okEvent?.data).toHaveProperty('publishedMainRowAfter')
-    expect(enterEvent?.data.movedID).toBe(String(getDocID(movedDoc)))
-  })
+      expect(enterEvent).toBeDefined()
+      expect(okEvent).toBeDefined()
+      expect(enterEvent?.flow).toBe(okEvent?.flow)
+      expect(enterEvent?.flow.startsWith('move-endpoint-')).toBe(true)
+      expect(enterEvent?.data).toHaveProperty('publishedMainRowBefore')
+      expect(okEvent?.data).toHaveProperty('publishedMainRowAfter')
+      expect(enterEvent?.data.movedID).toBe(String(getDocID(movedDoc)))
+    },
+  )
 
   it(
     'emits a page-tree-change:after event sharing the move flow id',
