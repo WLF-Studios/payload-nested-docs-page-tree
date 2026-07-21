@@ -123,8 +123,9 @@ export function createMovePageEndpoint(args: {
   collectionSlug: string
   diagnostics: Diagnostics
   parentFieldSlug: string
+  publishOnMove?: boolean
 }): Endpoint {
-  const { collectionSlug, diagnostics, parentFieldSlug } = args
+  const { collectionSlug, diagnostics, parentFieldSlug, publishOnMove = false } = args
   const snapshotFields = [...SNAPSHOT_FIELDS, parentFieldSlug]
 
   return {
@@ -240,6 +241,12 @@ export function createMovePageEndpoint(args: {
       const moveStart = Date.now()
       const hasDrafts = collectionHasDrafts({ collectionSlug, req })
       const hasAutosave = hasDrafts && collectionHasAutosaveDrafts({ collectionSlug, req })
+      // With `publishOnMove`, publish the reparent right away instead of staging
+      // it — but ONLY when the moved doc had nothing staged before the move (its
+      // latest version, read above with `draft: true`, is already published). A
+      // doc with pending draft edits stays staged, so those in-progress edits are
+      // never published as a side effect of the move.
+      const publishMove = publishOnMove && hasDrafts && movedDoc._status === 'published'
       const updateData = {
         [parentFieldSlug]:
           body.parentID === null
@@ -249,16 +256,17 @@ export function createMovePageEndpoint(args: {
                 id: body.parentID,
                 req,
               }),
+        ...(publishMove ? { _status: 'published' } : {}),
       }
       const updateArgs = {
         collection: collectionSlug as never,
         context: {
           [pageTreeMoveContextKey]: true,
         } as Record<string, unknown>,
-        autosave: hasAutosave ? true : undefined,
+        autosave: hasAutosave && !publishMove ? true : undefined,
         data: updateData as never,
         depth: 0,
-        draft: hasDrafts ? true : undefined,
+        draft: hasDrafts && !publishMove ? true : undefined,
         id: movedID as never,
         locale: getRequestedLocale(req) as never,
         overrideAccess: true,
@@ -287,9 +295,11 @@ export function createMovePageEndpoint(args: {
             draft: updateArgs.draft,
             hasTransaction: Boolean((req as { transactionID?: unknown }).transactionID),
             locale: updateArgs.locale ?? null,
+            movedDocStatus: movedDoc._status ?? null,
             movedID: String(movedID),
             nextParentID: body.parentID,
             publishedMainRowBefore: beforeSnapshot,
+            publishMove,
             updateData,
           },
           flow,
