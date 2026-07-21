@@ -275,6 +275,7 @@ export const nestedDocsPageTreePlugin =
     const defaultLimit = pluginOptions.defaultLimit ?? DEFAULT_LIMIT
     const hideBreadcrumbs = pluginOptions.hideBreadcrumbs ?? true
     const parentFieldSlug = pluginOptions.parentFieldSlug ?? DEFAULT_PARENT_FIELD_SLUG
+    const publishOnMove = pluginOptions.publishOnMove ?? false
     const badges = normalizeNestedDocsPageTreePluginBadgeConfig(pluginOptions.badges)
     const diagnostics = resolveDiagnostics(pluginOptions.diagnostics)
     const homeIndicatorCollectionSlugs = getHomeIndicatorCollectionSlugs(
@@ -354,6 +355,7 @@ export const nestedDocsPageTreePlugin =
             collectionSlug: collection.slug,
             diagnostics,
             parentFieldSlug,
+            publishOnMove,
           }),
           ...(orderableFieldName
             ? [

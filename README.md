@@ -114,6 +114,21 @@ https://github.com/user-attachments/assets/2513ff04-192e-4fdf-808f-6004f55d871c
 
 Internally, parent moves call this plugin's `/:id/move` endpoint. That endpoint updates the nested docs parent field through Payload's local API, while `@payloadcms/plugin-nested-docs` continues to own parent and breadcrumb behavior through its normal fields and hooks.
 
+### Publishing moves
+
+On a drafts-enabled collection a move is written through the drafts system, so by default it is staged as a **draft**: the tree updates immediately and the page shows a `changed` badge, but the live URL/path changes only when the page is next published. This is the safe default — publishing a move for a page that also has other pending edits would publish those edits too.
+
+Set `publishOnMove: true` to publish a move as soon as it happens — but only when it is safe to:
+
+```ts
+nestedDocsPageTreePlugin({
+  collections: ['pages'],
+  publishOnMove: true,
+})
+```
+
+With `publishOnMove` enabled, a move is published immediately **only if the moved page had no unpublished changes beforehand** (its latest version was already published). If the page has pending draft edits (a `changed` or draft-only page), the move stays staged exactly as before, so in-progress edits are never published as a side effect of a move. Collections without drafts always move live and are unaffected by this option.
+
 ## Home Indicator
 
 By default, the home icon is enabled only for the `pages` collection.
@@ -189,6 +204,7 @@ nestedDocsPageTreePlugin({
 - `hideBreadcrumbs`: defaults to `true`
 - `disabled`: defaults to `false`
 - `homeIndicator`: defaults to `{ collections: ['pages'] }`; set to `false` to disable
+- `publishOnMove`: defaults to `false`. When `true`, a move is published immediately if the moved page had no unpublished changes; pages with pending edits stay staged. See [Publishing moves](#publishing-moves).
 - `badges`: optional label and color overrides for `published`, `changed`, and `draft`
 - `diagnostics`: defaults to `false`. Enables structured diagnostic logging for tree-related publish/draft regressions; see below.
 

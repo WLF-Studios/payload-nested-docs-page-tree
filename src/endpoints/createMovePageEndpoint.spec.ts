@@ -17,10 +17,12 @@ function makeReq(args?: {
   body?: Record<string, unknown>
   collectionConfig?: CollectionConfig
   defaultIDType?: 'number' | 'text'
+  movedDocStatus?: 'draft' | 'published'
   updateShouldThrow?: boolean
 }): { calls: Record<string, unknown>[]; req: PayloadRequest } {
   const calls: Record<string, unknown>[] = []
   const body = args?.body ?? { parentID: 'parent-id' }
+  const movedDocStatus = args?.movedDocStatus ?? 'published'
   const collection = {
     config: args?.collectionConfig ?? { versions: undefined },
     customIDType: undefined,
@@ -43,7 +45,7 @@ function makeReq(args?: {
       logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
       find: vi.fn(async () => ({
         docs: [
-          { _status: 'published', id: 'abc', parent: null },
+          { _status: movedDocStatus, id: 'abc', parent: null },
           { _status: 'published', id: 'parent-id', parent: null },
         ],
       })),
@@ -218,5 +220,84 @@ describe('createMovePageEndpoint diagnostics', () => {
     expect(errorEvent).toBeDefined()
     expect(errorEvent?.level).toBe('error')
     expect(errorEvent?.data.message).toBe('update failed')
+  })
+})
+
+describe('createMovePageEndpoint publishOnMove', () => {
+  const dataOf = (call: Record<string, unknown>): Record<string, unknown> =>
+    call.data as Record<string, unknown>
+
+  it('stages the move as a draft by default (publishOnMove off)', async () => {
+    const endpoint = createMovePageEndpoint({
+      collectionSlug: 'pages',
+      diagnostics: resolveDiagnostics(false),
+      parentFieldSlug: 'parent',
+    })
+    const { calls, req } = makeReq({
+      collectionConfig: { versions: { drafts: true } },
+      movedDocStatus: 'published',
+    })
+
+    await endpoint.handler(req)
+
+    expect(calls[0].draft).toBe(true)
+    expect(dataOf(calls[0])._status).toBeUndefined()
+  })
+
+  it('publishes the move when publishOnMove is on and the doc was cleanly published', async () => {
+    const endpoint = createMovePageEndpoint({
+      collectionSlug: 'pages',
+      diagnostics: resolveDiagnostics(false),
+      parentFieldSlug: 'parent',
+      publishOnMove: true,
+    })
+    const { calls, req } = makeReq({
+      collectionConfig: { versions: { drafts: { autosave: { interval: 100 } } } },
+      movedDocStatus: 'published',
+    })
+
+    await endpoint.handler(req)
+
+    expect(calls[0].draft).toBeUndefined()
+    expect(calls[0].autosave).toBeUndefined()
+    expect(dataOf(calls[0])._status).toBe('published')
+  })
+
+  it('keeps the move staged when publishOnMove is on but the doc has pending draft changes', async () => {
+    const endpoint = createMovePageEndpoint({
+      collectionSlug: 'pages',
+      diagnostics: resolveDiagnostics(false),
+      parentFieldSlug: 'parent',
+      publishOnMove: true,
+    })
+    const { calls, req } = makeReq({
+      collectionConfig: { versions: { drafts: { autosave: { interval: 100 } } } },
+      movedDocStatus: 'draft',
+    })
+
+    await endpoint.handler(req)
+
+    expect(calls[0].draft).toBe(true)
+    expect(calls[0].autosave).toBe(true)
+    expect(dataOf(calls[0])._status).toBeUndefined()
+  })
+
+  it('ignores publishOnMove for collections without drafts', async () => {
+    const endpoint = createMovePageEndpoint({
+      collectionSlug: 'pages',
+      diagnostics: resolveDiagnostics(false),
+      parentFieldSlug: 'parent',
+      publishOnMove: true,
+    })
+    const { calls, req } = makeReq({
+      collectionConfig: { versions: undefined },
+      movedDocStatus: 'published',
+    })
+
+    await endpoint.handler(req)
+
+    expect(calls[0].draft).toBeUndefined()
+    expect(calls[0].autosave).toBeUndefined()
+    expect(dataOf(calls[0])._status).toBeUndefined()
   })
 })

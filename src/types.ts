@@ -52,6 +52,20 @@ export type NestedDocsPageTreePluginConfig = {
   hideBreadcrumbs?: boolean
   homeIndicator?: NestedDocsPageTreePluginHomeIndicatorConfig
   parentFieldSlug?: string
+  /**
+   * Publish a hierarchy move immediately instead of staging it as a draft — but
+   * ONLY when the moved document had no unpublished changes before the move (its
+   * latest version is already published). A document with pending draft edits (a
+   * "changed" or draft-only doc) always stays staged, so in-progress edits are
+   * never published as a side effect of a move. Only affects collections with
+   * drafts enabled; collections without drafts move live regardless.
+   *
+   * Disabled by default: every move is staged as a draft and the live URL/path
+   * changes only when the document is next published.
+   *
+   * @default false
+   */
+  publishOnMove?: boolean
 }
 
 export type NestedDocsPageTreePluginCollectionCustom = {
