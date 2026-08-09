@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { NestedDocsPageTreePluginDiagnosticEvent } from '../types.js'
 
 import { resolveDiagnostics } from '../utilities/diagnostics.js'
-import { pageTreeMoveContextKey } from '../types.js'
+import { pageTreeMoveContextKey, pageTreeWriteContextKey } from '../types.js'
 import { createMovePageEndpoint } from './createMovePageEndpoint.js'
 
 type CollectionConfig = {
@@ -226,6 +226,8 @@ describe('createMovePageEndpoint diagnostics', () => {
 describe('createMovePageEndpoint publishOnMove', () => {
   const dataOf = (call: Record<string, unknown>): Record<string, unknown> =>
     call.data as Record<string, unknown>
+  const contextOf = (call: Record<string, unknown>): Record<string, unknown> =>
+    call.context as Record<string, unknown>
 
   it('stages the move as a draft by default (publishOnMove off)', async () => {
     const endpoint = createMovePageEndpoint({
@@ -242,6 +244,8 @@ describe('createMovePageEndpoint publishOnMove', () => {
 
     expect(calls[0].draft).toBe(true)
     expect(dataOf(calls[0])._status).toBeUndefined()
+    expect(contextOf(calls[0])[pageTreeMoveContextKey]).toBe(true)
+    expect(contextOf(calls[0])[pageTreeWriteContextKey]).toBe(true)
   })
 
   it('publishes the move when publishOnMove is on and the doc was cleanly published', async () => {
@@ -261,6 +265,10 @@ describe('createMovePageEndpoint publishOnMove', () => {
     expect(calls[0].draft).toBeUndefined()
     expect(calls[0].autosave).toBeUndefined()
     expect(dataOf(calls[0])._status).toBe('published')
+    // The live site changed, so the deploy opt-out flag is withheld and a
+    // consumer rebuild hook fires. Diagnostics still sees the write flag.
+    expect(contextOf(calls[0])[pageTreeMoveContextKey]).toBeUndefined()
+    expect(contextOf(calls[0])[pageTreeWriteContextKey]).toBe(true)
   })
 
   it('keeps the move staged when publishOnMove is on but the doc has pending draft changes', async () => {

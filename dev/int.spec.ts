@@ -6,6 +6,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi 
 
 import { devUser } from './helpers/credentials.js'
 import { revalidatePublishedChange } from './lib/rebuild.js'
+import { createMovePageEndpoint } from '../src/endpoints/createMovePageEndpoint.js'
+import { resolveDiagnostics } from '../src/utilities/diagnostics.js'
 import { getRelationshipID } from '../src/utilities/pageTree.js'
 
 let payload: Payload
@@ -163,13 +165,14 @@ async function readPage(id: number | string, locale: DevLocale) {
 }
 
 async function invokeMove(args: {
+  endpoint?: Endpoint
   locale?: DevLocale
   movedID: number | string
   parentID: null | string
   user?: TestRequestUser
 }) {
-  const { locale, movedID, parentID, user } = args
-  const moveEndpoint = await getPagesMoveEndpoint()
+  const { endpoint, locale, movedID, parentID, user } = args
+  const moveEndpoint = endpoint ?? (await getPagesMoveEndpoint())
   const request = new Request(
     `http://localhost:3000/api/pages/${movedID}/move${locale ? `?locale=${locale}` : ''}`,
     {
@@ -390,6 +393,66 @@ describe('nestedDocsPageTreePlugin integration', () => {
 
     expect(response.status).toBe(200)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  test('triggers the Cloudflare deploy hook exactly once when publishOnMove publishes a move', async () => {
+    const user = await getSeedUser()
+    const root = await createPublishedPage({
+      slug: 'deploy-publish-move-root',
+      title: 'Deploy Publish Move Root',
+    })
+    const parent = await createPublishedPage({
+      slug: 'deploy-publish-move-parent',
+      title: 'Deploy Publish Move Parent',
+    })
+    const child = await createPublishedPage({
+      parent: String(parent.id),
+      slug: 'deploy-publish-move-child',
+      title: 'Deploy Publish Move Child',
+    })
+    const fetchMock = mockDeployHookFetch()
+
+    // The dev config leaves publishOnMove off, so build a publishing endpoint
+    // against the same live payload instance.
+    const response = await invokeMove({
+      endpoint: createMovePageEndpoint({
+        collectionSlug: 'pages',
+        diagnostics: resolveDiagnostics(false),
+        parentFieldSlug: 'parent',
+        publishOnMove: true,
+      }),
+      locale: 'en',
+      movedID: parent.id,
+      parentID: String(root.id),
+      user,
+    })
+
+    expect(response.status).toBe(200)
+
+    // The move went live: the published rows, not just the drafts, moved.
+    const publishedParent = await payload.findByID({
+      collection: 'pages',
+      depth: 0,
+      draft: false,
+      id: parent.id,
+      overrideAccess: true,
+    })
+    const publishedChild = await payload.findByID({
+      collection: 'pages',
+      depth: 0,
+      draft: false,
+      id: child.id,
+      overrideAccess: true,
+    })
+
+    expect(publishedParent._status).toBe('published')
+    expect(String(getRelationshipID(publishedParent.parent))).toBe(String(root.id))
+    expect(publishedChild.breadcrumbs?.at(-1)?.url).toBe(
+      '/deploy-publish-move-root/deploy-publish-move-parent/deploy-publish-move-child',
+    )
+
+    // One rebuild for the whole cascade, not one per descendant.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   test('reorders published pages silently without changing status or version history', async () => {

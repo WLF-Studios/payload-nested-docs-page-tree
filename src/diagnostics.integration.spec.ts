@@ -7,7 +7,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import type { NestedDocsPageTreePluginDiagnosticEvent } from './types.js'
 
+import { createMovePageEndpoint } from './endpoints/createMovePageEndpoint.js'
 import { nestedDocsPageTreePlugin } from './index.js'
+import { resolveDiagnostics } from './utilities/diagnostics.js'
 
 let collectedEvents: NestedDocsPageTreePluginDiagnosticEvent[] = []
 let memoryDB: MongoMemoryReplSet | undefined
@@ -77,11 +79,26 @@ async function createPage(title: string): Promise<Record<string, unknown>> {
   } as never) as unknown as Promise<Record<string, unknown>>
 }
 
+async function createPublishedPage(title: string): Promise<Record<string, unknown>> {
+  if (!payload) {
+    throw new Error('Payload was not initialized.')
+  }
+
+  return payload.create({
+    collection: 'pages',
+    data: { _status: 'published', title },
+    disableTransaction: true,
+    draft: false,
+    overrideAccess: true,
+  } as never) as unknown as Promise<Record<string, unknown>>
+}
+
 async function invokePageTreeMove(args: {
+  endpoint?: Endpoint
   movedDoc: Record<string, unknown>
   parentDoc: Record<string, unknown>
 }): Promise<Response> {
-  const { movedDoc, parentDoc } = args
+  const { endpoint, movedDoc, parentDoc } = args
   const movedID = getDocID(movedDoc)
   const body: Record<string, unknown> = { parentID: String(getDocID(parentDoc)) }
   const request = new Request(`http://localhost:3000/api/pages/${movedID}/move`, {
@@ -98,7 +115,7 @@ async function invokePageTreeMove(args: {
 
   payloadRequest.routeParams = { id: String(movedID) }
 
-  return getMoveEndpoint().handler(payloadRequest)
+  return (endpoint ?? getMoveEndpoint()).handler(payloadRequest)
 }
 
 describe('page-tree diagnostics integration', () => {
@@ -185,6 +202,44 @@ describe('page-tree diagnostics integration', () => {
       expect(changeEvent?.flow).toBe(enterEvent?.flow)
       expect(changeEvent?.data.docID).toBe(String(getDocID(movedDoc)))
       expect(Array.isArray(changeEvent?.data.changed)).toBe(true)
+    },
+  )
+
+  it(
+    'still emits page-tree-change events when publishOnMove publishes the move',
+    { retry: 3 },
+    async () => {
+      const movedDoc = await createPublishedPage('Diag publish move')
+      const parentDoc = await createPublishedPage('Diag publish parent')
+
+      collectedEvents = []
+
+      const response = await invokePageTreeMove({
+        endpoint: createMovePageEndpoint({
+          collectionSlug: 'pages',
+          diagnostics: resolveDiagnostics({
+            enabled: true,
+            logger: (event) => {
+              collectedEvents.push(event)
+            },
+          }),
+          parentFieldSlug: 'parent',
+          publishOnMove: true,
+        }),
+        movedDoc,
+        parentDoc,
+      })
+
+      expect(response.status).toBe(200)
+
+      const enterEvent = collectedEvents.find((event) => event.source === 'move-endpoint:enter')
+      const changeEvent = collectedEvents.find((event) => event.source === 'page-tree-change:after')
+
+      expect(enterEvent?.data.publishMove).toBe(true)
+      // The published move withholds the deploy opt-out flag; diagnostics is
+      // gated on the separate write flag so it must still fire here.
+      expect(changeEvent).toBeDefined()
+      expect(changeEvent?.data.changed).toContain('parent')
     },
   )
 

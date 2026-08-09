@@ -2,7 +2,11 @@ import type { Endpoint, PayloadRequest, Where } from 'payload'
 
 import { combineWhereConstraints, generateNKeysBetween } from 'payload/shared'
 
-import { pageTreeMoveContextKey, type PageTreeSourceDoc } from '../types.js'
+import {
+  pageTreeMoveContextKey,
+  type PageTreeSourceDoc,
+  pageTreeWriteContextKey,
+} from '../types.js'
 import {
   createFlowID,
   type Diagnostics,
@@ -666,7 +670,10 @@ export function createReorderPageEndpoint(args: {
         req.context = {}
       }
 
+      // A reorder only writes the order key, never publishing state, so it
+      // always carries the deploy opt-out flag.
       ;(req.context as Record<string, unknown>)[pageTreeMoveContextKey] = true
+      ;(req.context as Record<string, unknown>)[pageTreeWriteContextKey] = true
       ;(req.context as Record<string, unknown>)[DIAGNOSTICS_FLOW_CONTEXT_KEY] = flow
 
       const relatedDocsResult = await req.payload.find({

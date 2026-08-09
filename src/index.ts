@@ -10,7 +10,7 @@ import type {
   NestedDocsPageTreePluginCollectionCustom,
   NestedDocsPageTreePluginConfig,
 } from './types.js'
-import { nestedDocsPageTreePluginCustomKey, pageTreeMoveContextKey } from './types.js'
+import { nestedDocsPageTreePluginCustomKey, pageTreeWriteContextKey } from './types.js'
 import { normalizeNestedDocsPageTreePluginBadgeConfig } from './utilities/badgeConfig.js'
 import {
   DIAGNOSTICS_FLOW_CONTEXT_KEY,
@@ -55,7 +55,9 @@ function createDiagnosticsAfterChangeHook(args: {
       return doc
     }
 
-    if (!req.context?.[pageTreeMoveContextKey]) {
+    // Gated on the write flag, not the deploy opt-out flag: a published move
+    // withholds the latter, and that is the case most worth tracing.
+    if (!req.context?.[pageTreeWriteContextKey]) {
       return doc
     }
 

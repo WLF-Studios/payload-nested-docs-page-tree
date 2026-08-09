@@ -129,6 +129,10 @@ nestedDocsPageTreePlugin({
 
 With `publishOnMove` enabled, a move is published immediately **only if the moved page had no unpublished changes beforehand** (its latest version was already published). If the page has pending draft edits (a `changed` or draft-only page), the move stays staged exactly as before, so in-progress edits are never published as a side effect of a move. Collections without drafts always move live and are unaffected by this option.
 
+Publishing a move also republishes the moved page's descendants, so their live URLs follow the new parent. Since the live site really did change, a published move **does** trigger your deploy hook, once for the whole subtree - see [Deploy Hooks](#the-fix). Reorders and staged moves still do not. You do not need to change your hook when enabling this option.
+
+On a localized collection the parent field is shared across locales but breadcrumbs are not: publishing a move recomputes breadcrumbs only for the locale the move was made in, so other locales keep their previous URL until they are next published. If that matters for your setup, leave `publishOnMove` off.
+
 ## Home Indicator
 
 By default, the home icon is enabled only for the `pages` collection.
@@ -268,7 +272,7 @@ Why a tree move trips these: a typical deploy hook fires when `previousDoc?._sta
 
 ### The fix
 
-Add one line at the top of your hook. The plugin sets a flag on Payload's [hook context](https://payloadcms.com/docs/hooks/context) for every page-tree parent move, and your hook reads it to bail out early:
+Add one line at the top of your hook. The plugin sets a flag on Payload's [hook context](https://payloadcms.com/docs/hooks/context) for every page-tree write that leaves the live site unchanged, and your hook reads it to bail out early:
 
 ```ts
 import { pageTreeMoveContextKey } from 'payload-nested-docs-page-tree'
@@ -276,6 +280,18 @@ import { pageTreeMoveContextKey } from 'payload-nested-docs-page-tree'
 // at the top of your afterChange hook:
 if (req.context?.[pageTreeMoveContextKey]) return
 ```
+
+The rule is simply **rebuild when the live site changed**, so this one line stays correct in every configuration:
+
+| What the editor did in the tree | Live site changed? | Your deploy hook |
+| --- | --- | --- |
+| Reordered siblings | no - only the order key was written | does not fire |
+| Moved a page, default settings | no - the move is staged as a draft | does not fire |
+| Moved a page with [`publishOnMove`](#publishing-moves) on | yes - the page and its descendants have new URLs | fires once |
+
+Only the last row publishes anything, which is why it is the only row that rebuilds. It fires once for the whole subtree, not once per descendant. Enabling `publishOnMove` needs no change to your hook - the same line already does the right thing.
+
+To rebuild after **every** page-tree drag, including reorders, just leave the guard out. That also rebuilds on staged moves, which change nothing live.
 
 This goes in **your** hook - the one that calls the deploy webhook. Not in any of the template's stock files.
 

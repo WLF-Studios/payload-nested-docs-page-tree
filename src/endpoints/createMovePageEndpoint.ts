@@ -13,7 +13,11 @@ import {
   getDocParentID,
   stringifyDocID,
 } from '../utilities/pageTree.js'
-import { pageTreeMoveContextKey, type PageTreeSourceDoc } from '../types.js'
+import {
+  pageTreeMoveContextKey,
+  type PageTreeSourceDoc,
+  pageTreeWriteContextKey,
+} from '../types.js'
 import {
   assertUpdateAccess,
   collectionHasAutosaveDrafts,
@@ -261,7 +265,12 @@ export function createMovePageEndpoint(args: {
       const updateArgs = {
         collection: collectionSlug as never,
         context: {
-          [pageTreeMoveContextKey]: true,
+          // A published move changes the live URL of this page and of every
+          // descendant nested-docs resaves on this request, so the deploy
+          // opt-out flag is withheld and consumer rebuild hooks fire normally.
+          // A staged move changes nothing live and keeps the flag.
+          ...(publishMove ? {} : { [pageTreeMoveContextKey]: true }),
+          [pageTreeWriteContextKey]: true,
         } as Record<string, unknown>,
         autosave: hasAutosave && !publishMove ? true : undefined,
         data: updateData as never,

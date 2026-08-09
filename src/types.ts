@@ -86,8 +86,33 @@ export type PageTreeSourceDoc = Record<string, unknown> & {
 
 export const nestedDocsPageTreePluginCustomKey = 'nestedDocsPageTreePlugin'
 
+/**
+ * Set on Payload's hook context for every page-tree write that leaves the
+ * published site unchanged: sibling reorders, and parent moves staged as
+ * drafts. Deploy/revalidate hooks read it to skip rebuilds they do not need.
+ *
+ * It is deliberately NOT set when `publishOnMove` publishes a move, because
+ * that move changed the live URL of the page and its descendants and the site
+ * does need rebuilding. That way one guard covers every configuration:
+ *
+ * ```ts
+ * if (req.context?.[pageTreeMoveContextKey]) return
+ * ```
+ *
+ * Note the flag describes the *effect* of the write, not its kind - it is
+ * absent on published moves even though those are still page-tree moves. Use
+ * `pageTreeWriteContextKey` when you need "was this a page-tree write at all".
+ */
 export const pageTreeMoveContextKey = 'pageTreeMove'
+
+/**
+ * Internal: set on every page-tree write regardless of whether it published.
+ * Diagnostics uses it so that published moves are still traced, which is the
+ * case most worth observing. Not part of the public API.
+ */
+export const pageTreeWriteContextKey = 'pageTreeWrite'
 
 export type PageTreeMoveContext = {
   [pageTreeMoveContextKey]?: boolean
+  [pageTreeWriteContextKey]?: boolean
 }
