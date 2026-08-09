@@ -333,6 +333,13 @@ pnpm generate:types
 pnpm generate:importmap
 ```
 
+Open [http://localhost:3000/admin](http://localhost:3000/admin) and sign in with:
+
+- email: `admin@email.com`
+- password: `password`
+
+The dev app creates this user automatically on startup. After signing in, use the **seed the database** button on the dashboard to add the sample pages.
+
 Plugin source is in `src/`. The internal test app is in `dev/`.
 
 For checks:
