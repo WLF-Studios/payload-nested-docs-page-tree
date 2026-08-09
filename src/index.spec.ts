@@ -8,6 +8,28 @@ type CollectionEndpoint = NonNullable<Exclude<CollectionConfig['endpoints'], fal
 
 const pageTreeListViewPath = 'payload-nested-docs-page-tree/rsc#NestedDocsPageTreeListView'
 
+type FieldContainer = 'collapsible' | 'namedGroup' | 'namedTab' | 'row' | 'tab' | 'unnamedGroup'
+
+function wrapFields(
+  fields: CollectionConfig['fields'],
+  container: FieldContainer,
+): CollectionConfig['fields'] {
+  switch (container) {
+    case 'collapsible':
+      return [{ type: 'collapsible', fields, label: 'Editorial' }]
+    case 'namedGroup':
+      return [{ name: 'editorial', type: 'group', fields }]
+    case 'namedTab':
+      return [{ type: 'tabs', tabs: [{ name: 'editorial', fields, label: 'Editorial' }] }]
+    case 'row':
+      return [{ type: 'row', fields }]
+    case 'tab':
+      return [{ type: 'tabs', tabs: [{ fields, label: 'Editorial' }] }]
+    case 'unnamedGroup':
+      return [{ type: 'group', fields, label: 'Editorial' }]
+  }
+}
+
 function buildCollection(args: {
   breadcrumbsFieldSlug?: string
   customListViewComponent?: string
@@ -19,6 +41,7 @@ function buildCollection(args: {
   parentFieldSlug?: string
   slug: string
   useAsTitle?: string
+  wrapFieldsIn?: FieldContainer
 }): CollectionConfig {
   const {
     breadcrumbsFieldSlug = 'breadcrumbs',
@@ -31,6 +54,7 @@ function buildCollection(args: {
     parentFieldSlug = 'parent',
     slug,
     useAsTitle = 'title',
+    wrapFieldsIn,
   } = args
   const fields: CollectionConfig['fields'] = [
     {
@@ -88,7 +112,7 @@ function buildCollection(args: {
           },
         ]
       : undefined,
-    fields,
+    fields: wrapFieldsIn ? wrapFields(fields, wrapFieldsIn) : fields,
     ...(orderable ? { orderable: true } : {}),
     slug,
   }
@@ -104,6 +128,31 @@ function getCollectionEndpoints(
   collection: CollectionConfig | undefined,
 ): CollectionEndpoint[] {
   return Array.isArray(collection?.endpoints) ? collection.endpoints : []
+}
+
+function findFieldDeep(
+  fields: CollectionConfig['fields'] | undefined,
+  fieldName: string,
+): CollectionConfig['fields'][number] | undefined {
+  for (const field of fields ?? []) {
+    if ('name' in field && field.name === fieldName) {
+      return field
+    }
+
+    const childFields =
+      'fields' in field
+        ? field.fields
+        : 'tabs' in field
+          ? field.tabs.flatMap((tab) => tab.fields)
+          : undefined
+    const match = findFieldDeep(childFields, fieldName)
+
+    if (match) {
+      return match
+    }
+  }
+
+  return undefined
 }
 
 function getFieldHiddenValue(field: CollectionConfig['fields'][number] | undefined): boolean | undefined {
@@ -314,6 +363,50 @@ describe('nestedDocsPageTreePlugin', () => {
       ),
     ).toThrow('could not find the useAsTitle field "headline" on "pages"')
   })
+
+  it.each(['collapsible', 'row', 'tab', 'unnamedGroup'] as const)(
+    'resolves and patches fields nested inside a presentational %s',
+    (container) => {
+      const config = nestedDocsPageTreePlugin({
+        collections: ['pages'],
+      })(
+        buildConfig([
+          buildCollection({
+            slug: 'pages',
+            wrapFieldsIn: container,
+          }),
+        ]),
+      )
+
+      const patchedPagesCollection = config.collections?.[0]
+
+      expect(patchedPagesCollection?.admin?.components?.views?.list?.Component).toBe(
+        pageTreeListViewPath,
+      )
+      expect(
+        getFieldHiddenValue(findFieldDeep(patchedPagesCollection?.fields, 'breadcrumbs')),
+      ).toBe(true)
+      expect(findFieldDeep(patchedPagesCollection?.fields, 'title')).toBeDefined()
+    },
+  )
+
+  it.each(['namedGroup', 'namedTab'] as const)(
+    'throws when the useAsTitle field is nested inside a %s',
+    (container) => {
+      expect(() =>
+        nestedDocsPageTreePlugin({
+          collections: ['pages'],
+        })(
+          buildConfig([
+            buildCollection({
+              slug: 'pages',
+              wrapFieldsIn: container,
+            }),
+          ]),
+        ),
+      ).toThrow('could not find the useAsTitle field "title" on "pages"')
+    },
+  )
 
   it('throws when required nested-docs fields are missing', () => {
     expect(() =>

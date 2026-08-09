@@ -27,6 +27,8 @@ pnpm add payload-nested-docs-page-tree
 - a nested docs breadcrumbs field
 - a top-level `admin.useAsTitle` field
 
+These fields may live inside presentational containers — tabs, rows, collapsibles, and unnamed groups — because Payload still stores them at the top level of the document. Fields inside a **named** tab or **named** group are nested in the data and are not supported.
+
 Add `nestedDocsPageTreePlugin(...)` right after `nestedDocsPlugin(...)`:
 
 ```ts

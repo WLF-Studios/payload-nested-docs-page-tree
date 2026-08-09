@@ -19,6 +19,7 @@ import {
   projectField,
   resolveDiagnostics,
 } from './utilities/diagnostics.js'
+import { findTopLevelField, mapTopLevelFields } from './utilities/fields.js'
 
 const DEFAULT_BREADCRUMBS_FIELD_SLUG = 'breadcrumbs'
 const DEFAULT_HOME_INDICATOR_COLLECTIONS = ['pages']
@@ -123,13 +124,6 @@ function createDiagnosticsAfterChangeHook(args: {
   }
 }
 
-function getTopLevelField(
-  collection: Pick<CollectionConfig, 'fields'>,
-  fieldName: string,
-) {
-  return collection.fields.find((field) => 'name' in field && field.name === fieldName)
-}
-
 function getCollectionEndpoints(collection: CollectionConfig): CollectionEndpoint[] {
   return Array.isArray(collection.endpoints) ? [...collection.endpoints] : []
 }
@@ -167,19 +161,19 @@ function validateTargetCollection(args: {
     )
   }
 
-  if (!getTopLevelField(collection, collection.admin.useAsTitle)) {
+  if (!findTopLevelField(collection.fields, collection.admin.useAsTitle)) {
     throw new Error(
-      `payload-nested-docs-page-tree could not find the useAsTitle field "${collection.admin.useAsTitle}" on "${collection.slug}".`,
+      `payload-nested-docs-page-tree could not find the useAsTitle field "${collection.admin.useAsTitle}" on "${collection.slug}". Fields inside tabs, rows, collapsibles, and unnamed groups are supported; fields inside a named tab or named group are not top-level.`,
     )
   }
 
-  if (!getTopLevelField(collection, parentFieldSlug)) {
+  if (!findTopLevelField(collection.fields, parentFieldSlug)) {
     throw new Error(
       `payload-nested-docs-page-tree requires "${collection.slug}" to already define the nested docs parent field "${parentFieldSlug}". Register @payloadcms/plugin-nested-docs before payload-nested-docs-page-tree.`,
     )
   }
 
-  if (!getTopLevelField(collection, breadcrumbsFieldSlug)) {
+  if (!findTopLevelField(collection.fields, breadcrumbsFieldSlug)) {
     throw new Error(
       `payload-nested-docs-page-tree requires "${collection.slug}" to already define the nested docs breadcrumbs field "${breadcrumbsFieldSlug}". Register @payloadcms/plugin-nested-docs before payload-nested-docs-page-tree.`,
     )
@@ -370,7 +364,7 @@ export const nestedDocsPageTreePlugin =
               ]
             : []),
         ],
-        fields: collection.fields.map((field) =>
+        fields: mapTopLevelFields(collection.fields, (field) =>
           patchBreadcrumbField({
             breadcrumbsFieldSlug,
             field,
