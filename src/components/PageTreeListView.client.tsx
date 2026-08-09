@@ -31,9 +31,11 @@ import {
   useLocale,
   usePreferences,
   useTranslation,
+  useWindowInfo,
 } from '@payloadcms/ui'
 import { useRouter, useSearchParams } from 'next/navigation'
 import React from 'react'
+import { createPortal } from 'react-dom'
 
 import type { NestedDocsPageTreePluginResolvedBadgeConfig, PageTreeSourceDoc } from '../types.js'
 
@@ -694,7 +696,16 @@ function ParentMoveToggle({
   enabled: boolean
   onToggle: () => void
 }) {
-  return (
+  const {
+    breakpoints: { s: smallBreak },
+  } = useWindowInfo()
+  const [mobileActions, setMobileActions] = React.useState<Element | null>(null)
+  const setMobileMount = React.useCallback((node: HTMLSpanElement | null) => {
+    setMobileActions(
+      node?.closest('.collection-list')?.querySelector('.search-bar__actions') ?? null,
+    )
+  }, [])
+  const toggle = (
     <Pill
       aria-checked={enabled}
       aria-label={`${enabled ? 'Hide' : 'Show'} edit hierarchy handles`}
@@ -707,6 +718,17 @@ function ParentMoveToggle({
       Edit Hierarchy
     </Pill>
   )
+
+  if (smallBreak) {
+    return (
+      <>
+        <span hidden ref={setMobileMount} />
+        {mobileActions ? createPortal(toggle, mobileActions) : null}
+      </>
+    )
+  }
+
+  return toggle
 }
 
 function buildTableColumns(args: {
