@@ -4,11 +4,12 @@ import config from '@payload-config'
 import { createPayloadRequest, getPayload } from 'payload'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest'
 
-import { devUser } from './helpers/credentials.js'
-import { revalidatePublishedChange } from './lib/rebuild.js'
 import { createMovePageEndpoint } from '../src/endpoints/createMovePageEndpoint.js'
 import { resolveDiagnostics } from '../src/utilities/diagnostics.js'
-import { getRelationshipID } from '../src/utilities/pageTree.js'
+import { buildPageTreeDocs, getRelationshipID } from '../src/utilities/pageTree.js'
+import { devUser } from './helpers/credentials.js'
+import { revalidatePublishedChange } from './lib/rebuild.js'
+import { seed } from './seed.js'
 
 let payload: Payload
 const originalDeployHookURL = process.env.CLOUDFLARE_DEPLOY_HOOK_URL
@@ -259,6 +260,69 @@ async function countPageVersions(id: number | string) {
 }
 
 describe('nestedDocsPageTreePlugin integration', () => {
+  test('reseed replaces stale tabbed pages with the expected hierarchy', async () => {
+    await seed(payload)
+
+    const initialResult = await payload.find({
+      collection: 'tabbed-pages',
+      depth: 0,
+      draft: true,
+      locale: 'en',
+      overrideAccess: true,
+      pagination: false,
+    })
+    const initialHome = initialResult.docs.find((doc) => doc.slug === 'home')
+    const initialServices = initialResult.docs.find((doc) => doc.slug === 'services')
+
+    if (!initialHome || !initialServices) {
+      throw new Error('Could not resolve the seeded tabbed pages')
+    }
+
+    await payload.update({
+      id: initialHome.id,
+      collection: 'tabbed-pages',
+      data: {
+        parent: initialServices.id,
+      },
+      draft: false,
+      overrideAccess: true,
+    })
+    await payload.create({
+      collection: 'tabbed-pages',
+      data: {
+        slug: 'stale-page',
+        title: 'Stale Page',
+      },
+      draft: false,
+      overrideAccess: true,
+    })
+
+    await seed(payload)
+
+    const reseededResult = await payload.find({
+      collection: 'tabbed-pages',
+      depth: 0,
+      draft: true,
+      locale: 'en',
+      overrideAccess: true,
+      pagination: false,
+    })
+    const treeDocs = buildPageTreeDocs(
+      reseededResult.docs as unknown as Parameters<typeof buildPageTreeDocs>[0],
+    )
+
+    expect(
+      treeDocs.map((doc) => ({
+        slug: doc.slug,
+        depth: doc.__pageTreeDepth,
+      })),
+    ).toEqual([
+      { slug: 'home', depth: 0 },
+      { slug: 'about', depth: 1 },
+      { slug: 'services', depth: 0 },
+    ])
+  })
+
   test('patches each targeted collection with the tree list view and move endpoint', async () => {
     const pagesCollection = payload.collections.pages.config
 

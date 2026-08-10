@@ -2,7 +2,7 @@ import type { Payload, PayloadRequest } from 'payload'
 
 import { devUser } from './helpers/credentials.js'
 
-type SeedCollection = 'pages'
+type SeedCollection = 'pages' | 'tabbed-pages'
 type SeedPageStatus = 'draft' | 'published'
 type SeedDefinition = {
   parentSlug?: string
@@ -73,6 +73,14 @@ const pageSeedDefinitions: SeedDefinition[] = [
     status: 'draft',
     title: 'Request a Quote',
   },
+]
+
+// A small tree, on purpose: enough to see nesting and a same-level move, without
+// needing to scroll past the full pageSeedDefinitions tree above.
+const tabbedPageSeedDefinitions: SeedDefinition[] = [
+  { slug: 'home', title: 'Home' },
+  { slug: 'about', parentSlug: 'home', title: 'About' },
+  { slug: 'services', title: 'Services' },
 ]
 
 async function upsertPublishedDocument(args: {
@@ -181,12 +189,7 @@ async function seedTree(args: {
       collection,
       data: {
         parent: parentID,
-        ...(collection === 'pages'
-          ? {
-              publishedAt:
-                definition.status === 'draft' ? null : buildSeedPublishedAt(index),
-            }
-          : {}),
+        publishedAt: definition.status === 'draft' ? null : buildSeedPublishedAt(index),
         slug: definition.slug,
         title: definition.title,
       },
@@ -265,6 +268,21 @@ export const seed = async (payload: Payload) => {
     payload,
   })
 
+  await payload.delete({
+    collection: 'tabbed-pages',
+    overrideAccess: true,
+    where: {
+      id: {
+        exists: true,
+      },
+    },
+  } as never)
+
+  await seedTree({
+    collection: 'tabbed-pages',
+    definitions: tabbedPageSeedDefinitions,
+    payload,
+  })
 }
 
 export const seedWithRequest = async ({

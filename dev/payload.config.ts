@@ -1,5 +1,5 @@
 import { mongooseAdapter } from '@payloadcms/db-mongodb'
-import { nestedDocsPlugin } from '@payloadcms/plugin-nested-docs'
+import { createBreadcrumbsField, createParentField, nestedDocsPlugin } from '@payloadcms/plugin-nested-docs'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { MongoMemoryReplSet } from 'mongodb-memory-server'
 import path from 'path'
@@ -77,6 +77,78 @@ const Pages: CollectionConfig = {
   },
 }
 
+// Regression coverage for https://github.com/WLF-Studios/payload-nested-docs-page-tree/issues/3 -
+// useAsTitle, parent, and breadcrumbs each live inside a different presentational
+// container (unnamed tab, row, collapsible) instead of at the top level of `fields`.
+const TabbedPages: CollectionConfig = {
+  slug: 'tabbed-pages',
+  orderable: true,
+  access: {
+    create: ({ req }) => Boolean(req.user),
+    delete: ({ req }) => Boolean(req.user),
+    read: () => true,
+    update: ({ req }) => Boolean(req.user),
+  },
+  admin: {
+    defaultColumns: ['title', 'publishedAt', 'updatedAt', 'parent', 'slug', '_status'],
+    pagination: {
+      defaultLimit: 100,
+    },
+    useAsTitle: 'title',
+  },
+  fields: [
+    {
+      type: 'tabs',
+      tabs: [
+        {
+          label: 'Content',
+          fields: [
+            {
+              name: 'title',
+              type: 'text',
+              localized: true,
+              required: true,
+            },
+            slugField(),
+            {
+              name: 'publishedAt',
+              label: 'Published',
+              type: 'date',
+              admin: {
+                date: {
+                  pickerAppearance: 'dayAndTime',
+                },
+                readOnly: true,
+              },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      type: 'row',
+      fields: [createParentField('tabbed-pages')],
+    },
+    {
+      type: 'collapsible',
+      label: 'Breadcrumbs',
+      fields: [createBreadcrumbsField('tabbed-pages')],
+    },
+  ],
+  hooks: {
+    afterChange: [revalidatePublishedChange('tabbed-pages')],
+    afterDelete: [revalidateOnDelete('tabbed-pages')],
+  },
+  versions: {
+    drafts: {
+      autosave: {
+        interval: 100,
+      },
+    },
+    maxPerDoc: 20,
+  },
+}
+
 const buildNestedDocURL = (docs: Array<Record<string, unknown>>): string =>
   docs.reduce((url, doc) => {
     const slug = typeof doc.slug === 'string' ? doc.slug.replace(/^\/+|\/+$/g, '') : ''
@@ -105,7 +177,7 @@ const buildConfigWithMemoryDB = async () => {
       },
       user: Users.slug,
     },
-    collections: [Users, Pages],
+    collections: [Users, Pages, TabbedPages],
     db: mongooseAdapter({
       ensureIndexes: true,
       url: process.env.DATABASE_URL || '',
@@ -151,6 +223,26 @@ const buildConfigWithMemoryDB = async () => {
         },
         generateURL: (docs) => buildNestedDocURL(docs),
       }),
+      // parentFieldSlug/breadcrumbsFieldSlug are set so this instance trusts the
+      // parent/breadcrumbs fields already defined on TabbedPages (nested inside a
+      // row and a collapsible) instead of auto-appending flat top-level ones.
+      nestedDocsPlugin({
+        breadcrumbsFieldSlug: 'breadcrumbs',
+        collections: ['tabbed-pages'],
+        generateLabel: (_, doc) => {
+          if (typeof doc.title === 'string' && doc.title.trim()) {
+            return doc.title
+          }
+
+          if (typeof doc.slug === 'string' && doc.slug.trim()) {
+            return doc.slug
+          }
+
+          return String(doc.id ?? '')
+        },
+        generateURL: (docs) => buildNestedDocURL(docs),
+        parentFieldSlug: 'parent',
+      }),
       nestedDocsPageTreePlugin({
         badges: {
           colors: {
@@ -159,7 +251,7 @@ const buildConfigWithMemoryDB = async () => {
             draft: '#f8d5a7',
           },
         },
-        collections: ['pages'],
+        collections: ['pages', 'tabbed-pages'],
         diagnostics: true,
       }),
       cloudflareBuildStatusPlugin(),
