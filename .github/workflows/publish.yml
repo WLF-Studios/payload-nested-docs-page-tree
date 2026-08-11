@@ -4,6 +4,13 @@ on:
   release:
     types:
       - published
+      - released
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to publish, e.g. v1.4.1
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -13,11 +20,14 @@ jobs:
   publish:
     runs-on: ubuntu-latest
 
+    env:
+      PUBLISH_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
     steps:
       - name: Checkout release tag
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -38,7 +48,7 @@ jobs:
         shell: bash
         run: |
           package_version="$(node -p "require('./package.json').version")"
-          test "${{ github.event.release.tag_name }}" = "v${package_version}"
+          test "$PUBLISH_TAG" = "v${package_version}"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
