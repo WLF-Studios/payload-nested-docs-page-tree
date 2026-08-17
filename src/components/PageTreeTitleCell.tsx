@@ -1,7 +1,7 @@
 'use client'
 
 import { useDraggable } from '@dnd-kit/core'
-import { ChevronIcon, DragHandleIcon, useListQuery } from '@payloadcms/ui'
+import { ChevronIcon, useListQuery } from '@payloadcms/ui'
 import React from 'react'
 
 import type { PageTreeDoc } from '../utilities/pageTree.js'
@@ -158,7 +158,14 @@ export function PageTreeTitleCell({
           ref={rowDnd?.orderHandleRef}
           type="button"
         >
-          <DragHandleIcon />
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M7.125 6C7.95343 6 8.625 5.32843 8.625 4.5C8.625 3.67157 7.95343 3 7.125 3C6.29657 3 5.625 3.67157 5.625 4.5C5.625 5.32843 6.29657 6 7.125 6Z" fill="black"/>
+      <path d="M7.125 12C7.95343 12 8.625 11.3284 8.625 10.5C8.625 9.67157 7.95343 9 7.125 9C6.29657 9 5.625 9.67157 5.625 10.5C5.625 11.3284 6.29657 12 7.125 12Z" fill="black"/>
+      <path d="M7.125 18C7.95343 18 8.625 17.3284 8.625 16.5C8.625 15.6716 7.95343 15 7.125 15C6.29657 15 5.625 15.6716 5.625 16.5C5.625 17.3284 6.29657 18 7.125 18Z" fill="black"/>
+      <path d="M12.875 6C13.7034 6 14.375 5.32843 14.375 4.5C14.375 3.67157 13.7034 3 12.875 3C12.0466 3 11.375 3.67157 11.375 4.5C11.375 5.32843 12.0466 6 12.875 6Z" fill="black"/>
+      <path d="M12.875 12C13.7034 12 14.375 11.3284 14.375 10.5C14.375 9.67157 13.7034 9 12.875 9C12.0466 9 11.375 9.67157 11.375 10.5C11.375 11.3284 12.0466 12 12.875 12Z" fill="black"/>
+      <path d="M12.875 18C13.7034 18 14.375 17.3284 14.375 16.5C14.375 15.6716 13.7034 15 12.875 15C12.0466 15 11.375 15.6716 11.375 16.5C11.375 17.3284 12.0466 18 12.875 18Z" fill="black"/>
+      </svg>
         </button>
       ) : null}
       {canMoveDocs && parentMoveEnabled ? (
