@@ -28,6 +28,13 @@ beforeEach(() => {
 
 beforeAll(async () => {
   payload = await getPayload({ config })
+
+  // Finish collection and version index creation before starting test transactions.
+  await Promise.all(
+    [...Object.values(payload.db.collections), ...Object.values(payload.db.versions)].map((model) =>
+      model.init(),
+    ),
+  )
 })
 
 afterEach(() => {
