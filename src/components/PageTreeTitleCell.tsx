@@ -34,7 +34,8 @@ function ParentMoveHandleIcon() {
         d="M13.75 4.25L6.25 15.75"
         stroke="currentColor"
         strokeLinecap="round"
-        strokeWidth="2.25"
+        strokeWidth="1"
+        vectorEffect="non-scaling-stroke"
       />
     </svg>
   )
@@ -55,7 +56,8 @@ function HomeIndicatorIcon() {
         d="M2.5 7L7 3L11.5 7V13.25H2.5V7Z"
         stroke="currentColor"
         strokeLinejoin="round"
-        strokeWidth="1.5"
+        strokeWidth="1"
+        vectorEffect="non-scaling-stroke"
       />
     </svg>
   )

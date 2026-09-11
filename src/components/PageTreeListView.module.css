@@ -300,12 +300,8 @@
 
 .root :global(a.pages-hierarchy-status-badge),
 .root :global(.pages-hierarchy-status-badge__body) {
+  gap: 0.32rem;
   text-decoration: none;
-}
-
-.root :global(a.pages-hierarchy-status-badge:hover),
-.root :global(a.pages-hierarchy-status-badge__body:hover) {
-  text-decoration: underline;
 }
 
 .root :global(.pages-hierarchy-status-badge--split) {
@@ -318,7 +314,7 @@
   align-items: center;
   border-radius: 4px 0 0 4px;
   display: inline-flex;
-  padding: 0.32rem 0.32rem 0.32rem 0.72rem;
+  padding: 0.32rem 0.52rem;
 }
 
 .root :global(.pages-hierarchy-status-badge__preview) {
@@ -326,17 +322,41 @@
   align-items: center;
   justify-content: center;
   background: transparent;
+  border-inline-start: 1px solid color-mix(in srgb, currentColor 25%, transparent);
   border-radius: 0 4px 4px 0;
   color: inherit;
   min-inline-size: 24px;
   min-block-size: 20px;
-  padding: 0;
+  padding: 0 0.52rem 0 0.42rem;
   text-decoration: none;
 }
 
-.root :global(.pages-hierarchy-status-badge__preview .icon--externalLink) {
+.root :global(.pages-hierarchy-status-badge__icon) {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.root :global(.pages-hierarchy-status-badge__icon:has(.icon--link)) {
+  justify-content: center;
   width: 12px;
   height: 12px;
+  overflow: hidden;
+}
+
+.root :global(.pages-hierarchy-status-badge__icon .icon) {
+  width: 12px;
+  height: 12px;
+}
+
+.root :global(.pages-hierarchy-status-badge__icon .icon--link) {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.root :global(.pages-hierarchy-status-badge__icon .icon .stroke) {
+  vector-effect: non-scaling-stroke;
 }
 
 .root :global(a.pages-hierarchy-status-badge:hover),

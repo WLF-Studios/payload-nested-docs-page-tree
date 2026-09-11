@@ -85,6 +85,8 @@ export type NestedDocsPageTreePluginBadgesLinks = {
   draftHasPublishedVersion?: 'both' | 'live' | 'preview'
   /** Website base URL, resolved with the published document's last breadcrumb URL. */
   liveURL?: string
+  /** Show live link and preview eye icons. When false, 'both' keeps an external-link preview action. @default true */
+  showIcons?: boolean
 }
 
 export type PageTreeStatusLinks = {

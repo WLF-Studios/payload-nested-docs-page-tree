@@ -114,18 +114,20 @@ https://github.com/user-attachments/assets/e5fdb350-4740-4d80-9811-8c23deaf8701
 
 Enable `badgesLinks` as shown in [Setup](#setup).
 
-Published badges open live; draft-only badges open preview. For drafts with a published version, choose:
+Published badges open live with a right-side link icon; draft-only badges open preview with a right-side eye icon. Because drafts with a published version has two (live and draft) states, choose:
 
 | Value | Behavior |
 | --- | --- |
-| `'live'` | Badge opens live |
-| `'preview'` | Badge opens preview |
-| `'both'` (default) | Body opens live; right-side icon opens preview |
+| `'live'` | Whole badge, including the right-side link icon, opens live |
+| `'preview'` | Whole badge, including the right-side eye icon, opens preview |
+| `'both'` (default) | Body with link icon opens live; eye icon after a separator opens preview |
 
 - **Live:** Uses the published document's last breadcrumb URL and `liveURL`. Breadcrumbs must match your frontend routes. Omit `liveURL` for preview links only.
 - **Preview:** Uses the collection's [`admin.preview`](https://payloadcms.com/docs/admin/preview) callback. Your frontend must serve draft content.
 
-All links open in new tabs. Omit `badgesLinks` to keep badges unlinked, even with preview configured.
+All links open in new tabs. Unlinked badges have no icon. Omit `badgesLinks` to keep badges unlinked, even with preview configured.
+
+`badgesLinks.showIcons` defaults to `true`: live links use Payload's chain-link `LinkIcon`, and preview links use `EyeIcon`. Set it to `false` to hide inline badge icons; in `'both'` mode, the separate preview action still shows `ExternalLinkIcon` after the separator.
 
 <details>
 <summary>URL resolution and unavailable links</summary>
@@ -208,6 +210,7 @@ export const plugins = [
     },
 
     badgesLinks: { // Omit to disable links; preview uses collection admin.preview.
+      showIcons: true, // Default; false hides inline icons and keeps the split preview action.
       draftHasPublishedVersion: 'both', // 'live' | 'preview' | 'both'
       liveURL: 'https://www.example.com', // Base URL for the published breadcrumb path.
     },

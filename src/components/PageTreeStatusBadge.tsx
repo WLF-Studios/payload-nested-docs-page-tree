@@ -1,6 +1,7 @@
 'use client'
 
-import { ExternalLinkIcon, useTranslation } from '@payloadcms/ui'
+import { ExternalLinkIcon, LinkIcon, useTranslation } from '@payloadcms/ui'
+import { EyeIcon } from '@payloadcms/ui/icons/Eye'
 import React from 'react'
 
 import type {
@@ -33,6 +34,7 @@ export function PageTreeStatusBadge({
   const publicURL = badgesLinks ? doc.__pageTreeStatusLinks?.publicURL : undefined
   const previewURL = badgesLinks ? doc.__pageTreeStatusLinks?.previewURL : undefined
   const mode = badgesLinks?.draftHasPublishedVersion ?? 'both'
+  const showIcons = badgesLinks?.showIcons ?? true
   const split = status === 'changed' && mode === 'both' && Boolean(previewURL)
   const opensPreview = status === 'draft' || (status === 'changed' && mode === 'preview')
   const href = opensPreview
@@ -59,6 +61,11 @@ export function PageTreeStatusBadge({
     return href ? (
       <a {...badgeProps} {...linkProps}>
         {label}
+        {showIcons && (
+          <span aria-hidden="true" className="pages-hierarchy-status-badge__icon">
+            {opensPreview ? <EyeIcon active={false} /> : <LinkIcon />}
+          </span>
+        )}
       </a>
     ) : (
       <span {...badgeProps}>{label}</span>
@@ -70,6 +77,11 @@ export function PageTreeStatusBadge({
       {href ? (
         <a {...linkProps} className="pages-hierarchy-status-badge__body">
           {label}
+          {showIcons && (
+            <span aria-hidden="true" className="pages-hierarchy-status-badge__icon">
+              <LinkIcon />
+            </span>
+          )}
         </a>
       ) : (
         <span className="pages-hierarchy-status-badge__body">{label}</span>
@@ -81,8 +93,8 @@ export function PageTreeStatusBadge({
         href={previewURL}
         title={`${previewLabel} (${openInNewTabLabel})`}
       >
-        <span aria-hidden="true">
-          <ExternalLinkIcon />
+        <span aria-hidden="true" className="pages-hierarchy-status-badge__icon">
+          {showIcons ? <EyeIcon active={false} /> : <ExternalLinkIcon />}
         </span>
       </a>
     </span>
