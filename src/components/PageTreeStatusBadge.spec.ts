@@ -1,13 +1,18 @@
+import type { PageTreeLocaleStatus } from '../types.js'
+
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
 import { PageTreeStatusBadge } from './PageTreeStatusBadge.js'
 
+const localeState = vi.hoisted(() => ({ code: 'fr' }))
+
 vi.mock('@payloadcms/ui', () => ({
   ExternalLinkIcon: () =>
     React.createElement('svg', { 'data-page-tree-test-icon': 'external-link' }),
   LinkIcon: () => React.createElement('svg', { 'data-page-tree-test-icon': 'link' }),
+  useLocale: () => localeState,
   useTranslation: () => ({ t: (key: string) => key }),
 }))
 
@@ -122,4 +127,84 @@ describe('PageTreeStatusBadge', () => {
     )
     expect(html).not.toContain('<a ')
   })
+})
+
+describe('locale rendering', () => {
+  const statuses: PageTreeLocaleStatus[] = [
+    { locale: 'en', status: 'published' },
+    { locale: 'fr', status: 'changed' },
+    { locale: 'lt', status: 'draft' },
+    { locale: 'pl', status: 'unknown' },
+  ]
+  const badgeConfig = {
+    colors: { published: '#00ff00', changed: '#ffaa00', draft: '#cccccc' },
+    labels: { changed: 'Unpublished edits', published: 'Published', draft: 'Draft' },
+    locales: true,
+  }
+
+  it('renders locale codes in order with status text only on the active locale and no disclosure UI', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PageTreeStatusBadge, {
+        badgeConfig,
+        doc: { _status: 'draft', __pageTreeLocaleStatuses: statuses },
+      }),
+    )
+    expect(html.match(/data-locale="[^"]+"/g)).toEqual([
+      'data-locale="en"',
+      'data-locale="fr"',
+      'data-locale="lt"',
+      'data-locale="pl"',
+    ])
+    expect(html).toContain('Unpublished edits')
+    expect(html).not.toContain('>Published<')
+    expect(html).not.toContain('>Draft<')
+    expect(html).toContain('data-active="true"')
+    expect(html).toContain('--page-tree-badge-base:#ffaa00')
+    expect(html).not.toMatch(/<svg|title=|tabindex=|role="tooltip"|<a /)
+  })
+
+  it('ignores stale locale metadata when the option is disabled', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PageTreeStatusBadge, {
+        badgeConfig: { ...badgeConfig, locales: false },
+        doc: { _status: 'draft', __pageTreeLocaleStatuses: statuses },
+      }),
+    )
+    expect(html).not.toContain('data-locale=')
+    expect(html).toContain('>Draft<')
+  })
+
+  it('keeps the legacy badge when no localized statuses are supplied', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PageTreeStatusBadge, {
+        badgeConfig,
+        doc: { _status: 'published' },
+      }),
+    )
+    expect(html).not.toContain('data-locale=')
+    expect(html).toContain('>Published<')
+  })
+})
+
+it('expands the newly selected locale without changing badge order or statuses', () => {
+  localeState.code = 'lt'
+  try {
+    const html = renderToStaticMarkup(
+      React.createElement(PageTreeStatusBadge, {
+        badgeConfig: { colors: {}, labels: { draft: 'Draft', changed: 'Changes' }, locales: true },
+        doc: {
+          __pageTreeLocaleStatuses: [
+            { locale: 'fr', status: 'changed' },
+            { locale: 'lt', status: 'draft' },
+          ],
+        },
+      }),
+    )
+    expect(html).toContain('>Draft<')
+    expect(html).not.toContain('>Changes<')
+    expect(html.match(/data-locale="[^"]+"/g)).toEqual(['data-locale="fr"', 'data-locale="lt"'])
+    expect(html).not.toMatch(/title=|tabindex=|<svg|<a /)
+  } finally {
+    localeState.code = 'fr'
+  }
 })

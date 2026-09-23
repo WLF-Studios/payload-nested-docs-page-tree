@@ -15,6 +15,7 @@ import {
   getPageTreeBadgeLabel,
   getPageTreeDisplayStatus,
 } from '../utilities/status.js'
+import { PageTreeLocaleStatusBadges } from './PageTreeLocaleStatusBadges.js'
 
 export function PageTreeStatusBadge({
   badgeConfig,
@@ -26,6 +27,15 @@ export function PageTreeStatusBadge({
   doc: PageTreeSourceDoc
 }) {
   const { t } = useTranslation()
+  if (badgeConfig.locales && doc.__pageTreeLocaleStatuses?.length) {
+    return (
+      <PageTreeLocaleStatusBadges
+        badgeConfig={badgeConfig}
+        statuses={doc.__pageTreeLocaleStatuses}
+      />
+    )
+  }
+
   const status = getPageTreeDisplayStatus(doc)
   const color = getPageTreeBadgeColor({ badgeColors: badgeConfig.colors, status })
   const label = getPageTreeBadgeLabel({ badgeLabels: badgeConfig.labels, status, t })

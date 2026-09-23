@@ -420,3 +420,29 @@
   background: oklch(from var(--page-tree-badge-base) calc(l * 0.35) calc(c * 1.45) h);
   color: var(--page-tree-badge-base);
 }
+
+.root :global(td:has(.pages-hierarchy-locale-statuses)) {
+  width: 1%;
+}
+
+.root :global(.pages-hierarchy-locale-statuses) {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
+.root :global(.pages-hierarchy-locale-status-slot) {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.root :global(.pages-hierarchy-locale-status-slot--active) {
+  flex-grow: 1;
+}
+
+.root :global(.pages-hierarchy-locale-status-badge) {
+  column-gap: 0.25rem;
+  letter-spacing: normal;
+  padding-inline: 0.45rem;
+  text-transform: none;
+}

@@ -38,6 +38,7 @@ export function normalizeNestedDocsPageTreePluginBadgeConfig(
   const badgeConfig = value as NestedDocsPageTreePluginBadgeConfig
 
   return {
+    ...(badgeConfig.locales === true ? { locales: true } : {}),
     colors: normalizeBadgeMap(badgeConfig.colors),
     labels: normalizeBadgeMap(badgeConfig.labels),
   }

@@ -176,3 +176,137 @@ describe('NestedDocsPageTreeListView', () => {
     expect(result.props.badgesLinks).toEqual({ liveURL: 'https://example.com' })
   })
 })
+
+describe('locale status badges', () => {
+  const locales = [
+    { code: 'en', label: 'English' },
+    { code: 'fr', label: 'French' },
+    { code: 'lt', label: 'Lithuanian' },
+    { code: 'pl', label: 'Polish' },
+  ]
+
+  async function renderLocaleList(
+    options: {
+      enabled?: boolean
+      localized?: boolean
+      allowed?: string[]
+      empty?: boolean
+    } = {},
+  ) {
+    const collectionConfig = {
+      slug: 'pages',
+      admin: { useAsTitle: 'title' },
+      custom: {
+        nestedDocsPageTreePlugin: {
+          badges: { colors: {}, labels: {}, locales: options.enabled ?? true },
+          breadcrumbsFieldSlug: 'breadcrumbs',
+          defaultLimit: 100,
+          hideBreadcrumbs: true,
+          homeIndicator: { enabled: false },
+          parentFieldSlug: 'parent',
+        },
+      },
+      versions: { drafts: { localizeStatus: options.localized ?? true } },
+    }
+    const localization = {
+      defaultLocale: 'en',
+      localeCodes: locales.map(({ code }) => code),
+      locales,
+      ...(options.allowed
+        ? {
+            filterAvailableLocales: ({ locales: available }) =>
+              available.filter(({ code }) => options.allowed!.includes(code)),
+          }
+        : {}),
+    }
+    configMocks.getClientConfig.mockReturnValue({
+      collections: [collectionConfig],
+      localization: { ...localization },
+    })
+    const find = vi.fn(async ({ draft, locale }) => {
+      if (options.empty) return { docs: [] }
+      if (locale === 'all') {
+        return {
+          docs: [
+            {
+              id: 1,
+              _status: draft
+                ? { en: 'published', fr: 'draft', lt: 'draft' }
+                : { en: 'published', fr: 'published', lt: 'draft' },
+            },
+            // A second row proves status data is matched by ID, not array position.
+            { id: 2, _status: { en: 'draft', fr: 'draft' } },
+          ],
+        }
+      }
+      return {
+        docs: draft
+          ? [
+              { id: 2, title: 'Second', _status: 'draft' },
+              { id: 1, title: 'First', _status: 'draft' },
+            ]
+          : [
+              { id: 1, _status: 'published' },
+              { id: 2, _status: 'draft' },
+            ],
+      }
+    })
+    const result = await NestedDocsPageTreeListView({
+      collectionConfig,
+      collectionSlug: 'pages',
+      columnState: [],
+      data: { page: 1 },
+      i18n: { t: (key: string) => key },
+      locale: { code: 'fr' },
+      payload: { config: { localization }, find },
+    })
+    return { find, result }
+  }
+
+  it('loads independent locale statuses in permission-aware batches without changing row content', async () => {
+    const { find, result } = await renderLocaleList()
+    const rows = result.props.sourceDocs
+    expect(rows.find(({ id }) => id === 1)).toMatchObject({
+      title: 'First',
+      _status: 'draft',
+      __pageTreeLocaleStatuses: [
+        { locale: 'en', status: 'published' },
+        { locale: 'fr', status: 'changed' },
+        { locale: 'lt', status: 'draft' },
+        { locale: 'pl', status: 'unknown' },
+      ],
+    })
+    expect(rows.find(({ id }) => id === 2).__pageTreeLocaleStatuses[1].status).toBe('draft')
+    const batches = find.mock.calls.map(([args]) => args).filter(({ locale }) => locale === 'all')
+    expect(batches).toHaveLength(2)
+    for (const batch of batches) {
+      expect(batch).toMatchObject({
+        overrideAccess: false,
+        fallbackLocale: false,
+        depth: 0,
+        pagination: false,
+        select: { id: true, _status: true },
+        where: { id: { in: [2, 1] } },
+      })
+      expect(batch.req).toBeDefined()
+    }
+  })
+
+  it('does not serialize locales excluded by Payload locale filtering', async () => {
+    const { result } = await renderLocaleList({ allowed: ['en', 'lt'] })
+    expect(result.props.sourceDocs[0].__pageTreeLocaleStatuses.map(({ locale }) => locale)).toEqual(
+      ['en', 'lt'],
+    )
+  })
+
+  it.each([{ enabled: false }, { localized: false }, { empty: true }, { allowed: [] }])(
+    'skips locale reads when unavailable: %j',
+    async (options) => {
+      const { find, result } = await renderLocaleList(options)
+      expect(find.mock.calls.some(([args]) => args.locale === 'all')).toBe(false)
+      expect(
+        result.props.sourceDocs.every((doc) => doc.__pageTreeLocaleStatuses === undefined),
+      ).toBe(true)
+    },
+  )
+})

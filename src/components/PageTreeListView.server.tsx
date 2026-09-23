@@ -20,6 +20,7 @@ import React from 'react'
 import type { NestedDocsPageTreePluginBadgesLinks, PageTreeSourceDoc } from '../types.js'
 
 import { resolvePageTreeBadgeLinks } from '../utilities/badgeLinks.js'
+import { withPageTreeLocaleStatuses } from '../utilities/localeStatus.js'
 import { buildPageTreeDocs } from '../utilities/pageTree.js'
 import { getCollectionPageTreeConfig } from '../utilities/pageTreeConfig.js'
 import { withPageTreeDisplayStatuses } from '../utilities/status.js'
@@ -484,17 +485,38 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     user: props.user,
     where,
   } as never)
-  const treeSourceDocs = await getDocsWithDisplayStatus({
-    badgesLinks: pageTreeConfig.badgesLinks,
-    breadcrumbsFieldSlug: pageTreeConfig.breadcrumbsFieldSlug,
-    collectionConfig: props.collectionConfig,
+  const { clientCollectionConfig, clientConfig } = await getListClientConfig({
     collectionSlug: props.collectionSlug,
-    docs: fullResult.docs as unknown as PageTreeSourceDoc[],
-    locale,
+    i18n: props.i18n,
     payload: props.payload,
     req,
     user: props.user,
   })
+  const statusLocales =
+    pageTreeConfig.badges.locales &&
+    props.collectionConfig.versions?.drafts?.localizeStatus &&
+    clientConfig.localization
+      ? clientConfig.localization.locales.map(({ code }: { code: string }) => code)
+      : []
+  const treeSourceDocs = statusLocales.length
+    ? await withPageTreeLocaleStatuses({
+        collectionSlug: props.collectionSlug,
+        docs: fullResult.docs as PageTreeSourceDoc[],
+        locales: statusLocales,
+        payload: props.payload,
+        req,
+      })
+    : await getDocsWithDisplayStatus({
+        badgesLinks: pageTreeConfig.badgesLinks,
+        breadcrumbsFieldSlug: pageTreeConfig.breadcrumbsFieldSlug,
+        collectionConfig: props.collectionConfig,
+        collectionSlug: props.collectionSlug,
+        docs: fullResult.docs as PageTreeSourceDoc[],
+        locale,
+        payload: props.payload,
+        req,
+        user: props.user,
+      })
 
   const orderedDocs = buildPageTreeDocs(treeSourceDocs, {
     parentFieldSlug: pageTreeConfig.parentFieldSlug,
@@ -512,13 +534,7 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     totalDocs: orderedDocs.length,
     totalPages: 1,
   }
-  const { clientCollectionConfig, clientConfig } = await getListClientConfig({
-    collectionSlug: props.collectionSlug,
-    i18n: props.i18n,
-    payload: props.payload,
-    req,
-    user: props.user,
-  })
+
   const columnPreferences: ColumnPreference[] = (
     props.columnState as Array<{
       accessor: string

@@ -19,11 +19,14 @@ export type NestedDocsPageTreePluginBadgeMap = Partial<
 export type NestedDocsPageTreePluginBadgeConfig = {
   colors?: NestedDocsPageTreePluginBadgeMap
   labels?: NestedDocsPageTreePluginBadgeMap
+  /** Show locale badges when the collection enables localized draft status. */
+  locales?: boolean
 }
 
 export type NestedDocsPageTreePluginResolvedBadgeConfig = {
   colors: NestedDocsPageTreePluginBadgeMap
   labels: NestedDocsPageTreePluginBadgeMap
+  locales?: boolean
 }
 
 export type NestedDocsPageTreePluginHomeIndicatorConfig =
@@ -94,7 +97,13 @@ export type PageTreeStatusLinks = {
   publicURL?: string
 }
 
+export type PageTreeLocaleStatus = {
+  locale: string
+  status: 'changed' | 'draft' | 'published' | 'unknown'
+}
+
 export type PageTreeSourceDoc = Record<string, unknown> & {
+  __pageTreeLocaleStatuses?: PageTreeLocaleStatus[]
   __pageTreeStatusLinks?: PageTreeStatusLinks
   _displayStatus?: null | string
   _status?: null | string
