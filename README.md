@@ -107,6 +107,73 @@ See [the playground deploy hook](dev/lib/rebuild.ts) for a complete example. The
 
 Override any labels or colors with `badges`. Unspecified values use Payload defaults; custom colors adapt to light and dark themes.
 
+### Locale status badges
+
+Set `badges.locales: true` to show one badge for each available locale:
+
+```ts
+nestedDocsPageTreePlugin({
+  collections: ['pages'],
+  badges: {
+    locales: true,
+    // Existing colors and labels apply independently to each status.
+    labels: { changed: 'Unpublished edits' },
+  },
+})
+```
+
+For an editor using French, the badges appear side by side: **EN** | **FR · Unpublished edits** | **DE**.
+
+Locale badges stay on one horizontal line. Each language lines up vertically across table rows, with space reserved for the active language status so different label lengths do not shift the other badges. Codes display in uppercase (for example, EN, FR, DE) and follow the order in Payload's localization configuration, including `filterAvailableLocales`. Only the active editor locale expands to include status text. Each badge uses its own publication status color. There are no icons, tooltips, hover/focus disclosures, or locale-switching actions. These badges are informational; `badgesLinks` continues to apply only to the single-badge display. Status is included in each badge's accessible name without adding a tab stop.
+
+This requires Payload's native localized status, configured separately:
+
+```ts
+// Main Payload config
+experimental: { localizeStatus: true },
+localization: {
+  defaultLocale: 'en',
+  locales: ['en', 'fr', 'de'],
+},
+
+// Target collection
+versions: {
+  drafts: { localizeStatus: true },
+},
+```
+
+Localized status is experimental in the supported Payload versions. Follow [Payload's status-localization and migration guidance](https://payloadcms.com/docs/configuration/localization#status-localization) before enabling it for existing data. The plugin does not enable it or migrate your database. Collections without localized status, or with `badges.locales` omitted, retain the existing single badge.
+
+Statuses are read from the latest draft and current document, with locale fallback disabled:
+
+| Latest locale status | Current locale status | Badge |
+| --- | --- | --- |
+| Published | Any | Published |
+| Draft | Published | Unpublished edits |
+| Draft | Draft or missing | Draft |
+| Missing or unsupported | Any | Unknown (neutral) |
+
+The plugin batches the two status reads across the tree result, respects read permissions, and does not fetch content separately for every badge.
+
+#### Custom appearance
+
+The plugin keeps the status calculation and layout reusable. Use these styling hooks to apply a project-specific appearance, such as seasonal colors and status icons:
+
+- `.pages-hierarchy-locale-statuses`: the badge group.
+- `.pages-hierarchy-locale-status-badge`: a badge, with `data-locale`, `data-status`, and `data-active`.
+- `.pages-hierarchy-locale-status-badge__code`, `__separator`, and `__label`: the visible pieces.
+
+For example, local admin CSS can assign a season color:
+
+```css
+.pages-hierarchy-locale-statuses .pages-hierarchy-locale-status-badge[data-locale='summer'] {
+  background: #fff0a8;
+  color: #594600;
+}
+```
+
+A reskin can hide `__code` and `__separator` and add a status icon using the badge's `::before` and `data-status`, keeping the active status label and accessible name. The default plugin supplies no icons.
+
 ### Live and preview links
 
 
@@ -241,7 +308,7 @@ pnpm exec payload generate:importmap
 | `defaultLimit` | `100` | List page size |
 | `hideBreadcrumbs` | `true` | Hide the read-only breadcrumbs field |
 | `homeIndicator` | `{ collections: ['pages'] }` | Collections showing a home icon; `false` disables it |
-| `badges` | Payload defaults | Status label and color overrides |
+| `badges` | Payload defaults | Status labels, colors, and optional locale badges |
 | `badgesLinks` | Disabled | Live and preview links |
 | `publishOnMove` | `false` | Publish moves for pages without pending edits |
 | `diagnostics` | `false` | Structured operation logs |
@@ -260,6 +327,18 @@ pnpm dev
 ```
 
 Open [localhost:3000/admin](http://localhost:3000/admin). The playground creates `admin@email.com` / `password` on startup. Use **seed the database** on the dashboard to add sample pages.
+
+The Seed button populates three collections: **Pages** and **Tabbed Pages** use shared publication status; **Localized Pages** uses independent English/French/German status (`en`, `fr`, `de`, in that order). All three use the same 30-page tree, titles, slugs, and ordering in every language. Localized Pages includes mixed published, changed, and draft statuses for testing. Restart the playground after changing locale configuration, then click **seed the database** to populate all three languages. **Reseeding replaces all content and version history in these three playground collections**, removing stale pages and restoring the shared demo hierarchy. Users are preserved.
+
+For a fresh in-memory playground database on Windows:
+
+```powershell
+$env:PAYLOAD_TEST_DATABASE = 'true'
+pnpm.cmd dev
+```
+
+Without that flag, normal development uses `DATABASE_URL` from `dev/.env`. The two status modes can coexist in either database setup; no migration is needed for the new Localized Pages collection.
+
 
 ```bash
 pnpm generate:types

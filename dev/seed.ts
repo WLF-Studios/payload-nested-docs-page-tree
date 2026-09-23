@@ -75,97 +75,6 @@ const pageSeedDefinitions: SeedDefinition[] = [
   },
 ]
 
-// A small tree, on purpose: enough to see nesting and a same-level move, without
-// needing to scroll past the full pageSeedDefinitions tree above.
-const tabbedPageSeedDefinitions: SeedDefinition[] = [
-  { slug: 'home', title: 'Home' },
-  { slug: 'about', parentSlug: 'home', title: 'About' },
-  { slug: 'services', title: 'Services' },
-]
-
-async function upsertPublishedDocument(args: {
-  collection: SeedCollection
-  data: Record<string, unknown>
-  locale?: string
-  payload: Payload
-  slug: string
-  status?: SeedPageStatus
-}) {
-  const { collection, data, locale, payload, slug, status = 'published' } = args
-  const statusAwareData = {
-    ...data,
-    _status: status,
-  }
-  const shouldSaveAsDraft = status === 'draft'
-  const { docs } = await payload.find({
-    collection,
-    depth: 0,
-    draft: true,
-    limit: 1,
-    locale,
-    overrideAccess: true,
-    pagination: false,
-    where: {
-      slug: {
-        equals: slug,
-      },
-    },
-  } as never)
-  const existingDoc = docs[0] as { id: number | string } | undefined
-  const currentPublishedDoc =
-    status === 'draft'
-      ? ((await payload.find({
-          collection,
-          depth: 0,
-          draft: false,
-          limit: 1,
-          locale,
-          overrideAccess: true,
-          pagination: false,
-          where: {
-            slug: {
-              equals: slug,
-            },
-          },
-        } as never)).docs[0] as { id: number | string } | undefined)
-      : undefined
-
-  if (currentPublishedDoc) {
-    await payload.delete({
-      collection,
-      id: currentPublishedDoc.id,
-      overrideAccess: true,
-    } as never)
-
-    return payload.create({
-      collection,
-      data: statusAwareData,
-      draft: true,
-      locale,
-      overrideAccess: true,
-    } as never)
-  }
-
-  if (existingDoc) {
-    return payload.update({
-      collection,
-      data: statusAwareData,
-      draft: shouldSaveAsDraft,
-      id: existingDoc.id,
-      locale,
-      overrideAccess: true,
-    } as never)
-  }
-
-  return payload.create({
-    collection,
-    data: statusAwareData,
-    draft: shouldSaveAsDraft,
-    locale,
-    overrideAccess: true,
-  } as never)
-}
-
 async function seedTree(args: {
   collection: SeedCollection
   definitions: SeedDefinition[]
@@ -185,19 +94,19 @@ async function seedTree(args: {
       )
     }
 
-    const document = (await upsertPublishedDocument({
+    const document = (await payload.create({
       collection,
       data: {
+        _status: definition.status ?? 'published',
         parent: parentID,
         publishedAt: definition.status === 'draft' ? null : buildSeedPublishedAt(index),
         slug: definition.slug,
         title: definition.title,
       },
-      locale,
-      payload,
-      slug: definition.slug,
-      status: definition.status,
-    })) as { id: number | string }
+      locale: locale ?? 'en',
+      draft: definition.status === 'draft',
+      overrideAccess: true,
+    } as never)) as { id: number | string }
 
     seededIDsBySlug.set(definition.slug, document.id)
   }
@@ -206,12 +115,13 @@ async function seedTree(args: {
 }
 
 async function publishLocalizedPageTitles(args: {
+  collection: SeedCollection
   definitions: SeedDefinition[]
   locale: string
   pagesBySlug: Map<string, number | string>
   payload: Payload
 }) {
-  const { definitions, locale, pagesBySlug, payload } = args
+  const { collection, definitions, locale, pagesBySlug, payload } = args
 
   const localizedDefinitions = definitions.map((definition, index) => [index, definition] as const)
 
@@ -223,7 +133,7 @@ async function publishLocalizedPageTitles(args: {
     }
 
     await payload.update({
-      collection: 'pages',
+      collection,
       data: {
         _status: definition.status ?? 'published',
         publishedAt: definition.status === 'draft' ? null : buildSeedPublishedAt(index),
@@ -234,6 +144,73 @@ async function publishLocalizedPageTitles(args: {
       locale,
       overrideAccess: true,
     } as never)
+  }
+}
+
+async function seedLocalizedPages(payload: Payload) {
+  const statusExamples: Record<string, Record<'en' | 'fr' | 'de', 'published' | 'draft' | 'changed'>> = {
+    careers: { en: 'published', fr: 'draft', de: 'changed' },
+    'ux-audits': { en: 'draft', fr: 'changed', de: 'published' },
+    'request-a-quote': { en: 'changed', fr: 'published', de: 'draft' },
+  }
+  const idsBySlug = new Map<string, number | string>()
+  for (const definition of pageSeedDefinitions) {
+    const statuses = statusExamples[definition.slug] ?? {
+      en: definition.status ?? 'published',
+      fr: definition.status ?? 'published',
+      de: definition.status ?? 'published',
+    }
+    const parent = definition.parentSlug ? idsBySlug.get(definition.parentSlug) : null
+    if (definition.parentSlug && !parent) throw new Error('Missing seed parent: ' + definition.parentSlug)
+    const doc: { id: number | string } = await payload.create({
+      collection: 'localized-pages',
+      data: {
+        title: definition.title,
+        slug: definition.slug,
+        parent,
+        _status: 'draft',
+      },
+      draft: true,
+      locale: 'en',
+      overrideAccess: true,
+    } as never)
+
+    for (const locale of ['fr', 'de'] as const) {
+      await payload.update({
+        collection: 'localized-pages',
+        id: doc.id,
+        data: { title: definition.title, _status: 'draft' },
+        draft: true,
+        locale,
+        overrideAccess: true,
+      } as never)
+    }
+
+    for (const locale of ['en', 'fr', 'de'] as const) {
+      if (statuses[locale] === 'draft') continue
+      await payload.update({
+        collection: 'localized-pages',
+        id: doc.id,
+        data: { _status: 'published' },
+        locale,
+        publishSpecificLocale: locale,
+        overrideAccess: true,
+      } as never)
+    }
+
+    for (const locale of ['en', 'fr', 'de'] as const) {
+      if (statuses[locale] !== 'changed') continue
+      await payload.update({
+        collection: 'localized-pages',
+        id: doc.id,
+        data: { title: definition.title, _status: 'draft' },
+        draft: true,
+        locale,
+        overrideAccess: true,
+      } as never)
+    }
+
+    idsBySlug.set(definition.slug, doc.id)
   }
 }
 
@@ -255,34 +232,28 @@ export const seed = async (payload: Payload) => {
     } as never)
   }
 
-  const pagesBySlug = await seedTree({
-    collection: 'pages',
-    definitions: pageSeedDefinitions,
-    payload,
-  })
+  // All three collections are disposable playground fixtures, including versions.
+  for (const collection of ['pages', 'tabbed-pages', 'localized-pages'] as const) {
+    await payload.delete({
+      collection,
+      overrideAccess: true,
+      where: { id: { exists: true } },
+    } as never)
+  }
 
-  await publishLocalizedPageTitles({
-    definitions: pageSeedDefinitions,
-    locale: 'de',
-    pagesBySlug,
-    payload,
-  })
-
-  await payload.delete({
-    collection: 'tabbed-pages',
-    overrideAccess: true,
-    where: {
-      id: {
-        exists: true,
-      },
-    },
-  } as never)
-
-  await seedTree({
-    collection: 'tabbed-pages',
-    definitions: tabbedPageSeedDefinitions,
-    payload,
-  })
+  for (const collection of ['pages', 'tabbed-pages'] as const) {
+    const pagesBySlug = await seedTree({ collection, definitions: pageSeedDefinitions, payload })
+    for (const locale of ['fr', 'de'] as const) {
+      await publishLocalizedPageTitles({
+        collection,
+        definitions: pageSeedDefinitions,
+        locale,
+        pagesBySlug,
+        payload,
+      })
+    }
+  }
+  await seedLocalizedPages(payload)
 }
 
 export const seedWithRequest = async ({

@@ -29,10 +29,10 @@ test('renders the seeded pages tree with the expected columns and mixed statuses
   })
   await expect(page.locator('.pages-hierarchy-cell__drag-handle').first()).toBeVisible()
   await expect(page.locator('.pages-hierarchy-cell__toggle').first()).toBeVisible()
-  await expect(page.locator('.pages-hierarchy-table tbody tr')).toHaveCount(30)
+  await expect(page.locator('[data-page-tree-row="true"]')).toHaveCount(30)
   await expect(
     page.locator('.pages-hierarchy-table tbody tr').filter({
-      hasText: 'About',
+      hasText: 'Careers',
     }),
   ).toHaveCount(1)
   await expect(
@@ -142,4 +142,65 @@ test('status badge links split live navigation from the Preview external-link ic
   } finally {
     for (const id of ids) await page.request.delete(`/api/pages/${id}`)
   }
+})
+
+test('the Seed button populates shared and localized status collections', async ({ page }) => {
+  test.setTimeout(90_000)
+  await loginAsSeedUser(page)
+  await page.goto('/admin')
+  const seeded = page.waitForResponse(
+    (response) => response.url().includes('/next/seed') && response.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: 'seed the database' }).click()
+  expect((await seeded).ok()).toBe(true)
+  await expect(page.getByRole('link', { name: 'localized pages collection' })).toBeVisible()
+
+  await page.goto('/admin/collections/pages?locale=en')
+  await expect(page.locator('[data-page-tree-row="true"]')).toHaveCount(30)
+  await expect(page.locator('.pages-hierarchy-locale-statuses')).toHaveCount(0)
+  await expect(page.getByText('<No Title>', { exact: true })).toHaveCount(0)
+
+  await page.goto('/admin/collections/tabbed-pages?locale=fr')
+  await expect(page.locator('[data-page-tree-row="true"]')).toHaveCount(30)
+  await expect(page.getByText('<No Title>', { exact: true })).toHaveCount(0)
+
+  await page.goto('/admin/collections/localized-pages?locale=en')
+  await expect(page.locator('[data-page-tree-row="true"]')).toHaveCount(30)
+  await expect(page.locator('.pages-hierarchy-locale-statuses')).toHaveCount(30)
+  const careers = page.locator('[data-page-tree-row="true"]').filter({ hasText: 'Careers' })
+  await expect(careers.locator('[data-locale="en"]')).toHaveAttribute('data-status', 'published')
+  await expect(careers.locator('[data-locale="en"]')).toHaveAttribute('data-active', 'true')
+  await expect(careers.locator('[data-locale="de"]')).toHaveAttribute('data-status', 'changed')
+  await expect(careers.locator('[data-locale="de"]')).toHaveText('DE')
+  await expect(careers.locator('.pages-hierarchy-locale-status-badge__code')).toHaveText(['EN', 'FR', 'DE'])
+  await expect(careers.locator('[data-locale="fr"]')).toHaveAttribute('data-status', 'draft')
+  await expect(page.locator('.pages-hierarchy-locale-statuses svg')).toHaveCount(0)
+  await expect(page.locator('.pages-hierarchy-locale-statuses [title]')).toHaveCount(0)
+
+  await page.goto('/admin/collections/localized-pages?locale=de')
+  const germanCareers = page.locator('[data-page-tree-row="true"]').filter({ hasText: 'Careers' })
+  await expect(germanCareers.locator('[data-locale="de"]')).toHaveAttribute('data-active', 'true')
+  await expect(germanCareers.locator('[data-locale="de"] .pages-hierarchy-locale-status-badge__label')).toBeVisible()
+  await expect(germanCareers.locator('[data-locale="en"]')).toHaveText('EN')
+
+  for (const locale of ['en', 'fr', 'de']) {
+    await page.goto('/admin/collections/localized-pages?locale=' + locale)
+    const groups = page.locator('.pages-hierarchy-locale-statuses')
+    await expect(groups).toHaveCount(30)
+    const positions = await groups.evaluateAll((elements) => elements.map((element) =>
+      Array.from(element.querySelectorAll('.pages-hierarchy-locale-status-badge')).map((badge) => {
+        const { x, y, width, height } = badge.getBoundingClientRect()
+        return { x, y, width, height }
+      }),
+    ))
+    for (const row of positions) {
+      expect(row).toHaveLength(3)
+      for (let index = 0; index < row.length; index++) {
+        expect(Math.abs(row[index].y - row[0].y)).toBeLessThan(1)
+        expect(Math.abs(row[index].x - positions[0][index].x)).toBeLessThan(1)
+        if (index > 0) expect(row[index].x).toBeGreaterThanOrEqual(row[index - 1].x + row[index - 1].width)
+      }
+    }
+  }
+  await page.screenshot({ path: 'test-results/locale-badge-alignment.png', fullPage: true })
 })

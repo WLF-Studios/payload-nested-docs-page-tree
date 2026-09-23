@@ -14,8 +14,9 @@ const BeforeDashboard: React.FC = () => {
       </Banner>
       <ul className={`${baseClass}__instructions`}>
         <li>
-          Use the clean <strong>pages</strong> collection as-is, or <SeedButton /> with nested
-          orderable pages for drag-and-drop testing.
+          <SeedButton /> to rebuild the same 30-page tree in Pages, Tabbed Pages, and Localized Pages
+          with EN, FR, and DE titles. This replaces all pages and version history in these three
+          playground collections.
         </li>
       </ul>
     </div>

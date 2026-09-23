@@ -154,6 +154,29 @@ const TabbedPages: CollectionConfig = {
   },
 }
 
+const LocalizedPages: CollectionConfig = {
+  slug: 'localized-pages',
+  orderable: true,
+  access: Pages.access,
+  admin: {
+    description: 'Independent publication statuses for each language.',
+    defaultColumns: ['title', 'updatedAt', 'parent', 'slug', '_status'],
+    pagination: { defaultLimit: 100 },
+    useAsTitle: 'title',
+  },
+  fields: [
+    { name: 'title', type: 'text', localized: true, required: true },
+    slugField(),
+  ],
+  versions: {
+    drafts: {
+      localizeStatus: true,
+      autosave: { interval: 100 },
+    },
+    maxPerDoc: 20,
+  },
+}
+
 const buildNestedDocURL = (docs: Array<Record<string, unknown>>): string =>
   docs.reduce((url, doc) => {
     const slug = typeof doc.slug === 'string' ? doc.slug.replace(/^\/+|\/+$/g, '') : ''
@@ -182,17 +205,20 @@ const buildConfigWithMemoryDB = async () => {
       },
       user: Users.slug,
     },
-    collections: [Users, Pages, TabbedPages],
+    collections: [Users, Pages, TabbedPages, LocalizedPages],
     db: mongooseAdapter({
       ensureIndexes: true,
       url: process.env.DATABASE_URL || '',
     }),
     editor: lexicalEditor(),
     email: testEmailAdapter,
+    experimental: {
+      localizeStatus: true,
+    },
     localization: {
       defaultLocale: 'en',
       fallback: false,
-      locales: ['en', 'de'],
+      locales: ['en', 'fr', 'de'],
     },
     onInit: async (payload) => {
       const { totalDocs } = await payload.count({
@@ -214,7 +240,7 @@ const buildConfigWithMemoryDB = async () => {
     },
     plugins: [
       nestedDocsPlugin({
-        collections: ['pages'],
+        collections: ['pages', 'localized-pages'],
         generateLabel: (_, doc) => {
           if (typeof doc.title === 'string' && doc.title.trim()) {
             return doc.title
@@ -250,13 +276,14 @@ const buildConfigWithMemoryDB = async () => {
       }),
       nestedDocsPageTreePlugin({
         badges: {
+          locales: true,
           colors: {
             published: '#bbf3b0',
             changed: '#b9eaf3',
             draft: '#f8d5a7',
           },
         },
-        collections: ['pages', 'tabbed-pages'],
+        collections: ['pages', 'tabbed-pages', 'localized-pages'],
         badgesLinks: {
           draftHasPublishedVersion: 'both',
           liveURL: 'https://www.example.com',

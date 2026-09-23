@@ -7,8 +7,9 @@ import './index.scss'
 
 const SuccessMessage: React.FC = () => (
   <div>
-    Database seeded. Open the <a href="/admin/collections/pages">pages collection</a> or the{' '}
-    <a href="/admin/collections/tabbed-pages">tabbed pages collection</a>.
+    Database seeded. Open the <a href="/admin/collections/pages">pages collection</a>, the{' '}
+    <a href="/admin/collections/tabbed-pages">tabbed pages collection</a>, or the{' '}
+    <a href="/admin/collections/localized-pages">localized pages collection</a>.
   </div>
 )
 

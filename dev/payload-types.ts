@@ -70,6 +70,7 @@ export interface Config {
     users: User;
     pages: Page;
     'tabbed-pages': TabbedPage;
+    'localized-pages': LocalizedPage;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -80,6 +81,7 @@ export interface Config {
     users: UsersSelect<false> | UsersSelect<true>;
     pages: PagesSelect<false> | PagesSelect<true>;
     'tabbed-pages': TabbedPagesSelect<false> | TabbedPagesSelect<true>;
+    'localized-pages': LocalizedPagesSelect<false> | LocalizedPagesSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -88,10 +90,10 @@ export interface Config {
   db: {
     defaultIDType: string;
   };
-  fallbackLocale: ('false' | 'none' | 'null') | false | null | ('en' | 'de') | ('en' | 'de')[];
+  fallbackLocale: ('false' | 'none' | 'null') | false | null | ('en' | 'fr' | 'de') | ('en' | 'fr' | 'de')[];
   globals: {};
   globalsSelect: {};
-  locale: 'en' | 'de';
+  locale: 'en' | 'fr' | 'de';
   widgets: {
     collections: CollectionsWidget;
   };
@@ -199,6 +201,34 @@ export interface TabbedPage {
   _status?: ('draft' | 'published') | null;
 }
 /**
+ * Independent publication statuses for each language.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "localized-pages".
+ */
+export interface LocalizedPage {
+  id: string;
+  _order?: string | null;
+  title: string;
+  /**
+   * When enabled, the slug will auto-generate from the title field on save and autosave.
+   */
+  generateSlug?: boolean | null;
+  slug: string;
+  parent?: (string | null) | LocalizedPage;
+  breadcrumbs?:
+    | {
+        doc?: (string | null) | LocalizedPage;
+        url?: string | null;
+        label?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  updatedAt: string;
+  createdAt: string;
+  _status?: ('draft' | 'published') | null;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
@@ -233,6 +263,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'tabbed-pages';
         value: string | TabbedPage;
+      } | null)
+    | ({
+        relationTo: 'localized-pages';
+        value: string | LocalizedPage;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -331,6 +365,28 @@ export interface TabbedPagesSelect<T extends boolean = true> {
   generateSlug?: T;
   slug?: T;
   publishedAt?: T;
+  parent?: T;
+  breadcrumbs?:
+    | T
+    | {
+        doc?: T;
+        url?: T;
+        label?: T;
+        id?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+  _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "localized-pages_select".
+ */
+export interface LocalizedPagesSelect<T extends boolean = true> {
+  _order?: T;
+  title?: T;
+  generateSlug?: T;
+  slug?: T;
   parent?: T;
   breadcrumbs?:
     | T

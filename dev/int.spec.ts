@@ -1,15 +1,16 @@
 import type { Endpoint, Payload, PayloadRequest } from 'payload'
 
 import config from '@payload-config'
-import { createPayloadRequest, getPayload } from 'payload'
+import { createLocalReq, createPayloadRequest, getPayload } from 'payload'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { createMovePageEndpoint } from '../src/endpoints/createMovePageEndpoint.js'
+import { withPageTreeLocaleStatuses } from '../src/utilities/localeStatus.js'
 import { resolveDiagnostics } from '../src/utilities/diagnostics.js'
-import { buildPageTreeDocs, getRelationshipID } from '../src/utilities/pageTree.js'
+import { getRelationshipID } from '../src/utilities/pageTree.js'
 import { devUser } from './helpers/credentials.js'
 import { revalidatePublishedChange } from './lib/rebuild.js'
-import { seed } from './seed.js'
+import { seedWithRequest } from './seed.js'
 
 let payload: Payload
 const originalDeployHookURL = process.env.CLOUDFLARE_DEPLOY_HOOK_URL
@@ -259,73 +260,6 @@ async function countPageVersions(id: number | string) {
 }
 
 describe('nestedDocsPageTreePlugin integration', () => {
-  test('reseed replaces stale tabbed pages with the expected hierarchy', async () => {
-    await seed(payload)
-
-    const initialResult = await payload.find({
-      collection: 'tabbed-pages',
-      depth: 0,
-      draft: true,
-      locale: 'en',
-      overrideAccess: true,
-      pagination: false,
-    })
-    const initialHome = initialResult.docs.find((doc) => doc.slug === 'home')
-    const initialServices = initialResult.docs.find((doc) => doc.slug === 'services')
-
-    if (!initialHome || !initialServices) {
-      throw new Error('Could not resolve the seeded tabbed pages')
-    }
-
-    await payload.update({
-      id: initialHome.id,
-      collection: 'tabbed-pages',
-      data: {
-        parent: initialServices.id,
-      },
-      draft: false,
-      overrideAccess: true,
-    })
-    await payload.create({
-      collection: 'tabbed-pages',
-      data: {
-        slug: 'stale-page',
-        title: 'Stale Page',
-      },
-      draft: false,
-      overrideAccess: true,
-    })
-
-    await seed(payload)
-
-    const reseededResult = await payload.find({
-      collection: 'tabbed-pages',
-      depth: 0,
-      draft: true,
-      locale: 'en',
-      overrideAccess: true,
-      pagination: false,
-    })
-    const treeDocs = buildPageTreeDocs(
-      reseededResult.docs.map((doc) => ({
-        id: doc.id,
-        parent: doc.parent,
-        slug: doc.slug,
-      })),
-    )
-
-    expect(
-      treeDocs.map((doc) => ({
-        slug: doc.slug,
-        depth: doc.__pageTreeDepth,
-      })),
-    ).toEqual([
-      { slug: 'home', depth: 0 },
-      { slug: 'about', depth: 1 },
-      { slug: 'services', depth: 0 },
-    ])
-  })
-
   test('patches each targeted collection with the tree list view and move endpoint', async () => {
     const pagesCollection = payload.collections.pages.config
 
@@ -779,3 +713,65 @@ describe('nestedDocsPageTreePlugin integration', () => {
     expect(noopResponse.status).toBe(400)
   })
 })
+
+test('seeding rebuilds the same complete tree in every collection and locale', async () => {
+  expect(payload.collections.pages.config.versions?.drafts).toMatchObject({ localizeStatus: false })
+  expect(payload.collections['tabbed-pages'].config.versions?.drafts).toMatchObject({ localizeStatus: false })
+  expect(payload.collections['localized-pages'].config.versions?.drafts).toMatchObject({ localizeStatus: true })
+
+  for (let pass = 0; pass < 2; pass++) {
+    await seedWithRequest({ payload })
+    let baseline: unknown
+    for (const collection of ['pages', 'tabbed-pages', 'localized-pages'] as const) {
+      for (const locale of ['en', 'fr', 'de'] as const) {
+        const { docs } = await payload.find({
+          collection, locale, fallbackLocale: false, depth: 0, draft: true,
+          pagination: false, sort: '_order',
+        })
+        expect(docs).toHaveLength(30)
+        const slugByID = new Map(docs.map((doc) => [String(doc.id), doc.slug]))
+        const tree = docs.map((doc) => ({
+          title: doc.title,
+          slug: doc.slug,
+          parent: doc.parent ? slugByID.get(getRelationshipID(doc.parent)!) : null,
+          breadcrumbs: doc.breadcrumbs?.map(({ url, label }) => ({ url, label })),
+        }))
+        expect(tree.every((doc) => typeof doc.title === 'string' && doc.title.trim())).toBe(true)
+        expect(tree.find((doc) => doc.slug === 'home')?.parent).toBe(null)
+        expect(tree.find((doc) => doc.slug === 'about')?.parent).toBe(null)
+        expect(tree.find((doc) => doc.slug === 'leadership')?.parent).toBe('team')
+        if (!baseline) baseline = tree
+        expect(tree, collection + '/' + locale).toEqual(baseline)
+
+        if (collection === 'localized-pages' && locale === 'en') {
+          const req = await createLocalReq({ locale }, payload)
+          const rows = await withPageTreeLocaleStatuses({
+            collectionSlug: collection, docs: docs.map((doc) => ({ ...doc })),
+            locales: ['en', 'fr', 'de'], payload, req,
+          })
+          expect(Object.fromEntries(rows.filter((row) =>
+            ['home', 'careers', 'ux-audits', 'request-a-quote', 'company-news'].includes(String(row.slug)),
+          ).map((row) => [row.slug, row.__pageTreeLocaleStatuses?.map(({ status }) => status)]))).toEqual({
+            home: ['published', 'published', 'published'],
+            careers: ['published', 'draft', 'changed'],
+            'ux-audits': ['draft', 'changed', 'published'],
+            'request-a-quote': ['changed', 'published', 'draft'],
+            'company-news': ['draft', 'draft', 'draft'],
+          })
+        }
+      }
+      if (collection !== 'localized-pages') {
+        const normal = await payload.find({ collection, locale: 'all', limit: 1, draft: true })
+        expect(typeof normal.docs[0]._status).toBe('string')
+      }
+      if (pass === 0) {
+        const { docs } = await payload.find({ collection, locale: 'en', pagination: false })
+        const home = docs.find((doc) => doc.slug === 'home')!
+        const services = docs.find((doc) => doc.slug === 'services')!
+        await payload.update({ collection, id: home.id, data: { parent: services.id }, draft: true })
+        // Reproduce stale records with missing localized titles from older seeds.
+        await payload.create({ collection, data: { slug: 'stale-page' }, draft: true, locale: 'en' })
+      }
+    }
+  }
+}, 90_000)
