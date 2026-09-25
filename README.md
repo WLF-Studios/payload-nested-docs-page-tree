@@ -393,15 +393,18 @@ pnpm add /path/payload-nested-docs-page-tree-*.tgz
 ### Locale badge visibility
 
 With localized status badges enabled, the optional top-level
-`localeBadgeVisibility: ({ doc, locale, req }) => boolean` callback decides which
-badges are visible. It runs only on the server, against the latest draft with all
-locale values and the current user's read access. Returning false hides the badge
+`localeBadgeVisibility: ({ doc, publishedDoc, locale, req }) => boolean` callback decides which
+badges are visible. It runs only on the server and receives the latest draft as
+`doc` and the current document as `publishedDoc` when readable. Both contain all
+locales and respect the current user's read access. Check each locale's status
+before treating current content as published. This lets visibility follow published
+content independently of pending draft changes. Returning false hides the badge
 from both sight and assistive technology while preserving its aligned slot,
 including when that locale is selected. Publication status is unchanged.
 
 Without a callback, all locale badges remain visible. When configured, the existing
-batched draft query reads the document content needed by the callback; no per-row
-queries are added. The callback and document content are not passed to the client.
+two batched queries read the draft and current document content needed by the
+callback; no per-row queries are added. The callback and document content are not passed to the client.
 Project-specific inheritance or detachment rules belong in the consuming app.
 
 The optional top-level
@@ -412,3 +415,9 @@ all locales. Check the current document's locale status before treating its cont
 as published. This callback loads content in the same two access-controlled batched
 queries; no document content or callbacks are passed to the client. It never writes
 publication state. Without it, the plugin's normal status behavior is unchanged.
+
+The status callback can also return `{ status, label }` to override one locale's
+display text while retaining its publication status and status color. The label is
+used in the badge's accessible name and, for the active locale, its visible text.
+The resolved label is also exposed as `data-label` for custom styling. Existing
+callbacks returning a status string continue to work.

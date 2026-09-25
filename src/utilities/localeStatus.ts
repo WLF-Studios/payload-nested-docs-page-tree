@@ -55,9 +55,7 @@ export async function withPageTreeLocaleStatuses({
         req: { ...req, query: { ...req.query } },
         // Only opt-in callbacks need document content. Keep the two batched queries.
         select:
-          localeBadgeStatus || (draft && localeBadgeVisibility)
-            ? undefined
-            : { id: true, _status: true },
+          localeBadgeStatus || localeBadgeVisibility ? undefined : { id: true, _status: true },
         where: { id: { in: ids } },
       }),
     ),
@@ -76,15 +74,23 @@ export async function withPageTreeLocaleStatuses({
         _displayStatus: draft === 'draft' && current === 'published' ? 'changed' : undefined,
         _status: draft,
       })
+      const displayStatus =
+        localeBadgeStatus && draftDoc
+          ? localeBadgeStatus({ doc: draftDoc, locale, publishedDoc, req, status })
+          : status
       return {
         locale,
         ...(localeBadgeVisibility
-          ? { visible: Boolean(draftDoc && localeBadgeVisibility({ doc: draftDoc, locale, req })) }
+          ? {
+              visible: Boolean(
+                draftDoc && localeBadgeVisibility({ doc: draftDoc, locale, publishedDoc, req }),
+              ),
+            }
           : {}),
-        status:
-          localeBadgeStatus && draftDoc
-            ? localeBadgeStatus({ doc: draftDoc, locale, publishedDoc, req, status })
-            : status,
+        status: typeof displayStatus === 'string' ? displayStatus : displayStatus.status,
+        ...(typeof displayStatus === 'object' && displayStatus.label
+          ? { label: displayStatus.label }
+          : {}),
       }
     }),
   }))

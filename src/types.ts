@@ -43,6 +43,8 @@ export type PageTreeLocaleBadgeVisibility = (args: {
   /** Latest draft document with all locales, read with the current user's access. */
   doc: Record<string, unknown>
   locale: string
+  /** Current document, if readable. Check its locale status before treating it as published. */
+  publishedDoc?: Record<string, unknown>
   req: PayloadRequest
 }) => boolean
 
@@ -54,7 +56,7 @@ export type PageTreeLocaleBadgeStatus = (args: {
   publishedDoc?: Record<string, unknown>
   req: PayloadRequest
   status: PageTreeLocaleStatus['status']
-}) => PageTreeLocaleStatus['status']
+}) => PageTreeLocaleStatus['status'] | Pick<PageTreeLocaleStatus, 'status' | 'label'>
 
 export type NestedDocsPageTreePluginConfig = {
   badges?: NestedDocsPageTreePluginBadgeConfig
@@ -131,6 +133,8 @@ export type PageTreeStatusLinks = {
 }
 
 export type PageTreeLocaleStatus = {
+  /** Optional display label; publication status remains separate. */
+  label?: string
   locale: string
   status: 'changed' | 'draft' | 'published' | 'unknown'
   visible?: boolean

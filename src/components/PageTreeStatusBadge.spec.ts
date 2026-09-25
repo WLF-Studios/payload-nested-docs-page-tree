@@ -297,3 +297,26 @@ describe('locale editor links', () => {
     }
   })
 })
+
+it('uses the locale label override for visible text and the accessible editor link name', () => {
+  const html = renderToStaticMarkup(
+    React.createElement(PageTreeStatusBadge, {
+      badgeConfig: { colors: {}, labels: {}, locales: true },
+      collectionSlug: 'pages',
+      doc: {
+        id: 1,
+        __pageTreeLocaleStatuses: [
+          { locale: 'fr', status: 'published', label: 'Custom label' },
+          { locale: 'en', status: 'draft' },
+        ],
+      },
+    }),
+  )
+  expect(html).toContain('>Custom label</span>')
+  expect(html).toContain('aria-label="FR: Custom label"')
+  expect(html).toContain('data-label="Custom label"')
+  expect(html).toContain('data-status="published"')
+  expect(html).toContain('href="/cms/collections/pages/1?locale=fr"')
+  expect(html).toContain('aria-label="EN: version:draft"')
+  expect(html).not.toContain('title=')
+})

@@ -25,9 +25,11 @@ export function PageTreeLocaleStatusBadges({
 
   return (
     <span className="pages-hierarchy-locale-statuses">
-      {statuses.map(({ locale: code, status, visible }) => {
+      {statuses.map(({ label: customLabel, locale: code, status, visible }) => {
         const active = code === locale?.code
-        const label = getPageTreeBadgeLabel({ badgeLabels: badgeConfig.labels, status, t })
+        const label =
+          customLabel?.trim() ||
+          getPageTreeBadgeLabel({ badgeLabels: badgeConfig.labels, status, t })
         const color = getPageTreeBadgeColor({ badgeColors: badgeConfig.colors, status })
 
         const href =
@@ -51,6 +53,7 @@ export function PageTreeLocaleStatusBadges({
               className={`pages-hierarchy-status-badge pages-hierarchy-status-badge--${status} pages-hierarchy-locale-status-badge`}
               data-active={active ? 'true' : 'false'}
               data-custom-color={color ? 'true' : undefined}
+              data-label={label}
               data-locale={code}
               data-status={status}
               href={href}
