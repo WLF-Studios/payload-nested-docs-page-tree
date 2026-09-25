@@ -1,8 +1,8 @@
-import type { PageTreeLocaleStatus } from '../types.js'
-
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+
+import type { PageTreeLocaleStatus } from '../types.js'
 
 import { PageTreeStatusBadge } from './PageTreeStatusBadge.js'
 
@@ -12,6 +12,7 @@ vi.mock('@payloadcms/ui', () => ({
   ExternalLinkIcon: () =>
     React.createElement('svg', { 'data-page-tree-test-icon': 'external-link' }),
   LinkIcon: () => React.createElement('svg', { 'data-page-tree-test-icon': 'link' }),
+  useConfig: () => ({ config: { routes: { admin: '/cms' } } }),
   useLocale: () => localeState,
   useTranslation: () => ({ t: (key: string) => key }),
 }))
@@ -137,8 +138,8 @@ describe('locale rendering', () => {
     { locale: 'pl', status: 'unknown' },
   ]
   const badgeConfig = {
-    colors: { published: '#00ff00', changed: '#ffaa00', draft: '#cccccc' },
-    labels: { changed: 'Unpublished edits', published: 'Published', draft: 'Draft' },
+    colors: { changed: '#ffaa00', draft: '#cccccc', published: '#00ff00' },
+    labels: { changed: 'Unpublished edits', draft: 'Draft', published: 'Published' },
     locales: true,
   }
 
@@ -146,7 +147,7 @@ describe('locale rendering', () => {
     const html = renderToStaticMarkup(
       React.createElement(PageTreeStatusBadge, {
         badgeConfig,
-        doc: { _status: 'draft', __pageTreeLocaleStatuses: statuses },
+        doc: { __pageTreeLocaleStatuses: statuses, _status: 'draft' },
       }),
     )
     expect(html.match(/data-locale="[^"]+"/g)).toEqual([
@@ -167,7 +168,7 @@ describe('locale rendering', () => {
     const html = renderToStaticMarkup(
       React.createElement(PageTreeStatusBadge, {
         badgeConfig: { ...badgeConfig, locales: false },
-        doc: { _status: 'draft', __pageTreeLocaleStatuses: statuses },
+        doc: { __pageTreeLocaleStatuses: statuses, _status: 'draft' },
       }),
     )
     expect(html).not.toContain('data-locale=')
@@ -191,7 +192,7 @@ it('expands the newly selected locale without changing badge order or statuses',
   try {
     const html = renderToStaticMarkup(
       React.createElement(PageTreeStatusBadge, {
-        badgeConfig: { colors: {}, labels: { draft: 'Draft', changed: 'Changes' }, locales: true },
+        badgeConfig: { colors: {}, labels: { changed: 'Changes', draft: 'Draft' }, locales: true },
         doc: {
           __pageTreeLocaleStatuses: [
             { locale: 'fr', status: 'changed' },
@@ -207,4 +208,92 @@ it('expands the newly selected locale without changing badge order or statuses',
   } finally {
     localeState.code = 'fr'
   }
+})
+
+it('hides a locale badge from sight and accessibility while retaining its active alignment slot', () => {
+  const html = renderToStaticMarkup(
+    React.createElement(PageTreeStatusBadge, {
+      badgeConfig: { colors: {}, labels: {}, locales: true },
+      doc: {
+        __pageTreeLocaleStatuses: [
+          { locale: 'en', status: 'published', visible: true },
+          { locale: 'fr', status: 'draft', visible: false },
+        ],
+      },
+    }),
+  )
+  expect(html).toContain('pages-hierarchy-locale-status-slot--active')
+  expect(html).toContain('aria-hidden="true"')
+  expect(html).toContain('visibility:hidden')
+  expect(html.match(/data-locale=/g)).toHaveLength(2)
+  expect(html).not.toContain('display:none')
+})
+
+describe('locale editor links', () => {
+  const badgeConfig = { colors: {}, labels: {}, locales: true }
+
+  it('links every visible locale to the same document editor, including the active locale', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PageTreeStatusBadge, {
+        badgeConfig,
+        collectionSlug: 'pages',
+        doc: {
+          id: 1,
+          __pageTreeLocaleStatuses: [
+            { locale: 'en', status: 'published' },
+            { locale: 'fr', status: 'changed' },
+            { locale: 'spring', status: 'draft' },
+          ],
+        },
+      }),
+    )
+    expect(html.match(/<a\b[^>]*>/g)).toHaveLength(3)
+    for (const locale of ['en', 'fr', 'spring']) {
+      expect(html).toContain('href="/cms/collections/pages/1?locale=' + locale + '"')
+    }
+    expect(html).not.toMatch(/target=|title=|role="img"/)
+    expect(html).toContain('aria-label="FR: version:changed"')
+  })
+
+  it('keeps hidden badges as non-interactive placeholders', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PageTreeStatusBadge, {
+        badgeConfig,
+        collectionSlug: 'pages',
+        doc: {
+          id: 0,
+          __pageTreeLocaleStatuses: [
+            { locale: 'en', status: 'published', visible: true },
+            { locale: 'fr', status: 'draft', visible: false },
+          ],
+        },
+      }),
+    )
+    expect(html.match(/<a\b[^>]*>/g)).toHaveLength(1)
+    expect(html).toContain('href="/cms/collections/pages/0?locale=en"')
+    expect(html).not.toContain('href="/cms/collections/pages/0?locale=fr"')
+    expect(html).toContain('<span aria-hidden="true" aria-label="FR: version:draft"')
+    expect(html).toContain('visibility:hidden')
+  })
+
+  it('respects the deployment base path and encodes document IDs', () => {
+    vi.stubEnv('NEXT_BASE_PATH', '/portal')
+    try {
+      const html = renderToStaticMarkup(
+        React.createElement(PageTreeStatusBadge, {
+          badgeConfig,
+          collectionSlug: 'localized-pages',
+          doc: {
+            id: 'page/a b',
+            __pageTreeLocaleStatuses: [{ locale: 'fr-CA', status: 'draft' }],
+          },
+        }),
+      )
+      expect(html).toContain(
+        'href="/portal/cms/collections/localized-pages/page%2Fa%20b?locale=fr-CA"',
+      )
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
 })

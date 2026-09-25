@@ -43,28 +43,28 @@ describe('localized publication status integration', () => {
   it('keeps English published when French has draft changes, then updates only French on publish', async () => {
     const doc = await payload.create({
       collection: 'pages',
-      data: { title: 'English', _status: 'draft' },
+      data: { _status: 'draft', title: 'English' },
       draft: true,
       locale: 'en',
     })
     for (const locale of ['en', 'fr']) {
       await payload.update({
-        collection: 'pages',
         id: doc.id,
-        data: { title: locale === 'en' ? 'English' : 'French', _status: 'published' },
+        collection: 'pages',
+        data: { _status: 'published', title: locale === 'en' ? 'English' : 'French' },
         locale,
         publishSpecificLocale: locale,
       })
     }
     await payload.update({
-      collection: 'pages',
       id: doc.id,
+      collection: 'pages',
       data: { title: 'French draft' },
       draft: true,
       locale: 'fr',
     })
 
-    const req = await createLocalReq({ locale: 'fr', fallbackLocale: false }, payload)
+    const req = await createLocalReq({ fallbackLocale: false, locale: 'fr' }, payload)
     const readStatuses = () =>
       withPageTreeLocaleStatuses({
         collectionSlug: 'pages',
@@ -82,8 +82,8 @@ describe('localized publication status integration', () => {
     expect(req.fallbackLocale).toBe(false)
 
     await payload.update({
-      collection: 'pages',
       id: doc.id,
+      collection: 'pages',
       data: { _status: 'published' },
       locale: 'fr',
       publishSpecificLocale: 'fr',
@@ -95,8 +95,8 @@ describe('localized publication status integration', () => {
     ])
 
     await payload.update({
-      collection: 'pages',
       id: doc.id,
+      collection: 'pages',
       data: { _status: 'draft' },
       locale: 'fr',
     })

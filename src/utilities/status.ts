@@ -1,7 +1,7 @@
 import type {
-  PageTreeSourceDoc,
   NestedDocsPageTreePluginBadgeMap,
   NestedDocsPageTreePluginBadgeStatus,
+  PageTreeSourceDoc,
 } from '../types.js'
 
 export type PageTreeDisplayStatus = 'changed' | 'draft' | 'published' | 'unknown'
@@ -37,10 +37,10 @@ export function getPageTreeDisplayStatus(
 }
 
 export function getPageTreeDisplayStatusLabelKey(status: PageTreeDisplayStatus):
-  | 'version:draft'
+  | 'general:noValue'
   | 'version:changed'
-  | 'version:published'
-  | 'general:noValue' {
+  | 'version:draft'
+  | 'version:published' {
   if (status === 'changed') {
     return 'version:changed'
   }

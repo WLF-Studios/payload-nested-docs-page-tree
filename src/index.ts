@@ -4,18 +4,19 @@ import type {
   Config,
 } from 'payload'
 
-import { createMovePageEndpoint } from './endpoints/createMovePageEndpoint.js'
-import { createReorderPageEndpoint } from './endpoints/createReorderPageEndpoint.js'
 import type {
   NestedDocsPageTreePluginCollectionCustom,
   NestedDocsPageTreePluginConfig,
 } from './types.js'
+
+import { createMovePageEndpoint } from './endpoints/createMovePageEndpoint.js'
+import { createReorderPageEndpoint } from './endpoints/createReorderPageEndpoint.js'
 import { nestedDocsPageTreePluginCustomKey, pageTreeWriteContextKey } from './types.js'
 import { normalizeNestedDocsPageTreePluginBadgeConfig } from './utilities/badgeConfig.js'
 import {
-  DIAGNOSTICS_FLOW_CONTEXT_KEY,
-  type Diagnostics,
   createFlowID,
+  type Diagnostics,
+  DIAGNOSTICS_FLOW_CONTEXT_KEY,
   projectField,
   resolveDiagnostics,
 } from './utilities/diagnostics.js'
@@ -47,7 +48,7 @@ function createDiagnosticsAfterChangeHook(args: {
     snapshotFields.push(orderableFieldName)
   }
 
-  return async ({ doc, operation, previousDoc, req }) => {
+  return ({ doc, operation, previousDoc, req }) => {
     if (!diagnostics.enabled) {
       return doc
     }
@@ -115,7 +116,7 @@ function createDiagnosticsAfterChangeHook(args: {
         },
         flow,
         level: 'warn',
-        message: `Published doc was demoted to "${String(afterStatus ?? 'missing')}" by a page-tree operation. Inspect the move-endpoint:enter/ok snapshots in flow ${flow} to confirm whether the main row was touched.`,
+        message: `Published doc was demoted to "${typeof afterStatus === 'string' ? afterStatus : JSON.stringify(afterStatus ?? 'missing')}" by a page-tree operation. Inspect the move-endpoint:enter/ok snapshots in flow ${flow} to confirm whether the main row was touched.`,
         source: 'page-tree-change:status-flip',
       })
     }
@@ -214,6 +215,8 @@ function buildCollectionCustom(args: {
   defaultLimit: number
   hideBreadcrumbs: boolean
   homeIndicator: NestedDocsPageTreePluginCollectionCustom['homeIndicator']
+  localeBadgeStatus?: NestedDocsPageTreePluginConfig['localeBadgeStatus']
+  localeBadgeVisibility?: NestedDocsPageTreePluginConfig['localeBadgeVisibility']
   parentFieldSlug: string
 }): NestedDocsPageTreePluginCollectionCustom {
   const {
@@ -223,6 +226,8 @@ function buildCollectionCustom(args: {
     defaultLimit,
     hideBreadcrumbs,
     homeIndicator,
+    localeBadgeStatus,
+    localeBadgeVisibility,
     parentFieldSlug,
   } = args
 
@@ -233,6 +238,8 @@ function buildCollectionCustom(args: {
     defaultLimit,
     hideBreadcrumbs,
     homeIndicator,
+    localeBadgeStatus,
+    localeBadgeVisibility,
     parentFieldSlug,
   }
 }
@@ -347,6 +354,8 @@ export const nestedDocsPageTreePlugin =
             homeIndicator: {
               enabled: homeIndicatorCollectionSlugs.has(collection.slug),
             },
+            localeBadgeStatus: pluginOptions.localeBadgeStatus,
+            localeBadgeVisibility: pluginOptions.localeBadgeVisibility,
             parentFieldSlug,
           }),
         },
@@ -402,6 +411,6 @@ export const nestedDocsPageTreePlugin =
 
     return {
       ...config,
-      collections: nextCollections as CollectionConfig[],
+      collections: nextCollections,
     }
   }

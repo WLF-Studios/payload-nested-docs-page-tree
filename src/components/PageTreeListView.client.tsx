@@ -62,9 +62,9 @@ import {
   type PageTreeDoc,
 } from '../utilities/pageTree.js'
 import { pageTreeCollisionDetectionStrategy } from '../utilities/pageTreeCollision.js'
-import { PageTreeStatusBadge } from './PageTreeStatusBadge.js'
 import { PageTreeProvider, PageTreeRowDndProvider } from './PageTreeContext.js'
 import styles from './PageTreeListView.module.css'
+import { PageTreeStatusBadge } from './PageTreeStatusBadge.js'
 import { PageTreeTitleCell } from './PageTreeTitleCell.js'
 
 type PageTreeListViewClientProps = {
@@ -376,7 +376,8 @@ function getSelectableRowData(doc: PageTreeDoc): SelectableRowData {
   const record = doc as Record<string, unknown>
 
   return {
-    id: String(doc.id ?? doc.__pageTreeID),
+    // Payload's selection Map preserves numeric IDs despite SelectRow's string-only type.
+    id: (doc.id ?? doc.__pageTreeID) as SelectableRowData['id'],
     _isLocked: Boolean(record._isLocked),
     _userEditing: record._userEditing as SelectableRowData['_userEditing'],
   }
@@ -644,15 +645,17 @@ function getDropTargetValidation(args: {
 function renderStatusBadge(args: {
   badgeConfig: NestedDocsPageTreePluginResolvedBadgeConfig
   badgesLinks?: NestedDocsPageTreePluginBadgesLinks
+  collectionSlug: string
   doc: PageTreeDoc
   index: number
   t: (key: 'general:noValue' | 'version:changed' | 'version:draft' | 'version:published') => string
 }): React.ReactNode {
-  const { badgeConfig, badgesLinks, doc, index } = args
+  const { badgeConfig, badgesLinks, collectionSlug, doc, index } = args
   return (
     <PageTreeStatusBadge
       badgeConfig={badgeConfig}
       badgesLinks={badgesLinks}
+      collectionSlug={collectionSlug}
       doc={doc}
       key={doc.__pageTreeID ?? index}
     />
@@ -706,6 +709,7 @@ function ParentMoveToggle({
 function buildTableColumns(args: {
   badgeConfig: NestedDocsPageTreePluginResolvedBadgeConfig
   badgesLinks?: NestedDocsPageTreePluginBadgesLinks
+  collectionSlug: string
   columnState: Column[]
   docs: PageTreeDoc[]
   enableRowSelections?: boolean
@@ -718,6 +722,7 @@ function buildTableColumns(args: {
   const {
     badgeConfig,
     badgesLinks,
+    collectionSlug,
     columnState,
     docs,
     enableRowSelections,
@@ -751,6 +756,7 @@ function buildTableColumns(args: {
           renderStatusBadge({
             badgeConfig,
             badgesLinks,
+            collectionSlug,
             doc,
             index,
             t,
@@ -1306,6 +1312,7 @@ export default function PageTreeListViewClient({
       buildTableColumns({
         badgeConfig,
         badgesLinks,
+        collectionSlug: props.collectionSlug,
         columnState: paginatedColumnState,
         docs: displayedPaginatedDocs,
         enableRowSelections: props.enableRowSelections,
@@ -1323,6 +1330,7 @@ export default function PageTreeListViewClient({
       homeIndicatorEnabled,
       orderableFieldName,
       parentFieldSlug,
+      props.collectionSlug,
       props.enableRowSelections,
       i18n.t,
       useAsTitle,

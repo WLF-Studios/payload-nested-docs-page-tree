@@ -5,6 +5,7 @@ Page management tools for Payload admin, built on [`@payloadcms/plugin-nested-do
 - **Page tree UI** with hierarchy and page URL paths.
 - **Intuitive drag and drop** to reorder siblings or move pages between parents.
 - **Status badges** for published pages, drafts, and drafts with unpublished changes.
+- **Localized status badges** to see each language's publication status and open the page editor in that language with one click.
 - **Live and preview links** from badges, with separate destinations for changed pages.
 - **Customizable badges** with label and color overrides for light and dark themes.
 - **Homepage icon** to identify the root `home` page.
@@ -14,7 +15,7 @@ Page management tools for Payload admin, built on [`@payloadcms/plugin-nested-do
 
 **Coming soon:** custom badges for any cell.
 
-[Page tree](#page-tree-ui) · [Drag and drop](#drag-and-drop) · [Badges](#badges) · [Live and preview links](#live-and-preview-links) · [Homepage icon](#homepage-icon) · [Diagnostics](#diagnostics) · [Full setup](#setup) · [Configuration](#configuration)
+[Page tree](#page-tree-ui) · [Drag and drop](#drag-and-drop) · [Badges](#badges) · [Localized status](#locale-status-badges) · [Live and preview links](#live-and-preview-links) · [Homepage icon](#homepage-icon) · [Diagnostics](#diagnostics) · [Full setup](#setup) · [Configuration](#configuration)
 
 ## Page tree UI
 
@@ -109,6 +110,12 @@ Override any labels or colors with `badges`. Unspecified values use Payload defa
 
 ### Locale status badges
 
+![Localized page status badges for English, French, and German, with French selected](assets/localized-status.png)
+
+See each page's publication status across languages directly in the page tree. Each language has its own color-coded badge showing whether the page is published, a draft, or has unpublished changes. Click a language badge to open that page's editor in the selected language, in the same tab.
+
+The active language also shows its status label, such as **FR · Published** or **FR · Changed**. Other languages show their codes, such as **EN** and **DE**, with their own status colors. Badges line up across rows so editors can quickly scan for translations that need attention.
+
 Set `badges.locales: true` to show one badge for each available locale:
 
 ```ts
@@ -124,7 +131,9 @@ nestedDocsPageTreePlugin({
 
 For an editor using French, the badges appear side by side: **EN** | **FR · Unpublished edits** | **DE**.
 
-Locale badges stay on one horizontal line. Each language lines up vertically across table rows, with space reserved for the active language status so different label lengths do not shift the other badges. Codes display in uppercase (for example, EN, FR, DE) and follow the order in Payload's localization configuration, including `filterAvailableLocales`. Only the active editor locale expands to include status text. Each badge uses its own publication status color. There are no icons, tooltips, hover/focus disclosures, or locale-switching actions. These badges are informational; `badgesLinks` continues to apply only to the single-badge display. Status is included in each badge's accessible name without adding a tab stop.
+Locale codes display in uppercase and follow the order in Payload's localization configuration, respecting `filterAvailableLocales`. Existing badge label and color overrides apply to each locale's status.
+
+Badge links support keyboard navigation, include the language and status in their accessible names, and respect your configured admin route. Hidden badges preserve their aligned slots and cannot be clicked. Locale badges link to the editor independently of `badgesLinks`, which controls live and preview links on single status badges.
 
 This requires Payload's native localized status, configured separately:
 
@@ -192,7 +201,7 @@ Published badges open live with a right-side link icon; draft-only badges open p
 - **Live:** Uses the published document's last breadcrumb URL and `liveURL`. Breadcrumbs must match your frontend routes. Omit `liveURL` for preview links only.
 - **Preview:** Uses the collection's [`admin.preview`](https://payloadcms.com/docs/admin/preview) callback. Your frontend must serve draft content.
 
-All links open in new tabs. Unlinked badges have no icon. Omit `badgesLinks` to keep badges unlinked, even with preview configured.
+All live and preview links open in new tabs. Unlinked badges have no icon. Omit `badgesLinks` to keep single status badges unlinked, even with preview configured. Locale badges still link to the editor.
 
 `badgesLinks.showIcons` defaults to `true`: live links use Payload's chain-link `LinkIcon`, and preview links use `EyeIcon`. Set it to `false` to hide inline badge icons; in `'both'` mode, the separate preview action still shows `ExternalLinkIcon` after the separator.
 
@@ -288,7 +297,7 @@ export const plugins = [
 ]
 ```
 
-Only `collections` is required in the page-tree config. Omit `badges` for default styling and `badgesLinks` to disable links. Preview links require the collection's `admin.preview` callback.
+Only `collections` is required in the page-tree config. Omit `badges` for default styling and `badgesLinks` to disable live and preview links. Preview links require the collection's `admin.preview` callback.
 
 Each target collection needs parent, breadcrumbs, and `admin.useAsTitle` fields stored at the document's top level. Presentational tabs, rows, collapsibles, and unnamed groups are supported; fields inside named tabs or groups are not.
 
@@ -357,3 +366,26 @@ pnpm add /path/payload-nested-docs-page-tree-*.tgz
 ```
 
 </details>
+
+### Locale badge visibility
+
+With localized status badges enabled, the optional top-level
+`localeBadgeVisibility: ({ doc, locale, req }) => boolean` callback decides which
+badges are visible. It runs only on the server, against the latest draft with all
+locale values and the current user's read access. Returning false hides the badge
+from both sight and assistive technology while preserving its aligned slot,
+including when that locale is selected. Publication status is unchanged.
+
+Without a callback, all locale badges remain visible. When configured, the existing
+batched draft query reads the document content needed by the callback; no per-row
+queries are added. The callback and document content are not passed to the client.
+Project-specific inheritance or detachment rules belong in the consuming app.
+
+The optional top-level
+`localeBadgeStatus: ({ doc, publishedDoc, locale, req, status }) => status`
+callback overrides the displayed status. It receives the latest draft, the current
+document (when readable), and the default computed status. Both documents contain
+all locales. Check the current document's locale status before treating its content
+as published. This callback loads content in the same two access-controlled batched
+queries; no document content or callbacks are passed to the client. It never writes
+publication state. Without it, the plugin's normal status behavior is unchanged.

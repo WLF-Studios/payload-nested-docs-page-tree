@@ -153,22 +153,22 @@ describe('withPageTreeDisplayStatuses', () => {
       withPageTreeDisplayStatuses({
         currentDocs: [
           {
-            _status: 'published',
             id: 'page-1',
+            _status: 'published',
           },
         ],
         draftDocs: [
           {
-            _status: 'draft',
             id: 'page-1',
+            _status: 'draft',
           },
         ],
       }),
     ).toMatchObject([
       {
+        id: 'page-1',
         _displayStatus: 'changed',
         _status: 'draft',
-        id: 'page-1',
       },
     ])
   })
@@ -178,22 +178,22 @@ describe('withPageTreeDisplayStatuses', () => {
       withPageTreeDisplayStatuses({
         currentDocs: [
           {
-            _status: 'draft',
             id: 'page-2',
+            _status: 'draft',
           },
         ],
         draftDocs: [
           {
-            _status: 'draft',
             id: 'page-2',
+            _status: 'draft',
           },
         ],
       }),
     ).toMatchObject([
       {
+        id: 'page-2',
         _displayStatus: 'draft',
         _status: 'draft',
-        id: 'page-2',
       },
     ])
   })

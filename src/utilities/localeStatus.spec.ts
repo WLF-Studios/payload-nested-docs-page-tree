@@ -1,0 +1,99 @@
+import type { Payload, PayloadRequest } from 'payload'
+
+import { describe, expect, it, vi } from 'vitest'
+
+import { withPageTreeLocaleStatuses } from './localeStatus.js'
+
+describe('locale badge visibility', () => {
+  const draftDoc = {
+    id: 1,
+    _status: { en: 'draft', fr: 'draft' },
+    enabled: { en: true, fr: false },
+  }
+  const req = { locale: 'en', query: {}, user: { id: 9 } } as unknown as PayloadRequest
+  const setup = () => {
+    const find = vi.fn(({ draft }: { draft?: boolean; select?: unknown }) => Promise.resolve({
+      docs: draft ? [draftDoc] : [{ id: 1, _status: { en: 'published', fr: 'draft' } }],
+    }))
+    return {
+      args: {
+        collectionSlug: 'pages',
+        docs: [{ id: 1 }],
+        locales: ['en', 'fr'],
+        payload: { find } as unknown as Payload,
+        req,
+      },
+      find,
+    }
+  }
+
+  it('passes all-locale draft data to the rule and preserves status and locale order', async () => {
+    const { args, find } = setup()
+    const visibility = vi.fn(
+      ({ doc, locale }: { doc: Record<string, unknown>; locale: string }) =>
+        (doc.enabled as Record<string, boolean>)[locale] === true,
+    )
+    const result = await withPageTreeLocaleStatuses({ ...args, localeBadgeVisibility: visibility })
+    expect(result[0].__pageTreeLocaleStatuses).toEqual([
+      { locale: 'en', status: 'changed', visible: true },
+      { locale: 'fr', status: 'draft', visible: false },
+    ])
+    expect(visibility).toHaveBeenCalledWith({ doc: draftDoc, locale: 'fr', req })
+    expect(find).toHaveBeenCalledTimes(2)
+    expect(find.mock.calls[0][0]).toMatchObject({
+      depth: 0,
+      locale: 'all',
+      overrideAccess: false,
+      select: undefined,
+    })
+    expect(find.mock.calls[1][0]).toMatchObject({ select: { id: true, _status: true } })
+    expect(result[0]).not.toHaveProperty('enabled')
+  })
+
+  it('preserves default visibility and narrow queries without a callback', async () => {
+    const { args, find } = setup()
+    const result = await withPageTreeLocaleStatuses(args)
+    expect(result[0].__pageTreeLocaleStatuses).toEqual([
+      { locale: 'en', status: 'changed' },
+      { locale: 'fr', status: 'draft' },
+    ])
+    expect(find.mock.calls.every(([query]) => query.select !== undefined)).toBe(true)
+  })
+
+  it('applies an opt-in status override with both documents without changing visibility or stored data', async () => {
+    const { args, find } = setup()
+    const localeBadgeStatus = vi.fn<
+      NonNullable<Parameters<typeof withPageTreeLocaleStatuses>[0]['localeBadgeStatus']>
+    >(({ locale, status }) => (locale === 'en' ? 'draft' : status))
+    const before = JSON.stringify(draftDoc)
+    const result = await withPageTreeLocaleStatuses({
+      ...args,
+      localeBadgeStatus,
+      localeBadgeVisibility: ({ locale }) => locale === 'en',
+    })
+    expect(result[0].__pageTreeLocaleStatuses).toEqual([
+      { locale: 'en', status: 'draft', visible: true },
+      { locale: 'fr', status: 'draft', visible: false },
+    ])
+    expect(localeBadgeStatus).toHaveBeenCalledWith({
+      doc: draftDoc,
+      locale: 'en',
+      publishedDoc: { id: 1, _status: { en: 'published', fr: 'draft' } },
+      req,
+      status: 'changed',
+    })
+    expect(find).toHaveBeenCalledTimes(2)
+    expect(find.mock.calls.every(([query]) => query.select === undefined)).toBe(true)
+    expect(JSON.stringify(draftDoc)).toBe(before)
+    expect(result[0]).not.toHaveProperty('enabled')
+  })
+
+  it('hides unavailable drafts without passing missing documents to the callback', async () => {
+    const { args, find } = setup()
+    find.mockResolvedValue({ docs: [] })
+    const visibility = vi.fn(() => true)
+    const result = await withPageTreeLocaleStatuses({ ...args, localeBadgeVisibility: visibility })
+    expect(result[0].__pageTreeLocaleStatuses?.every(({ visible }) => visible === false)).toBe(true)
+    expect(visibility).not.toHaveBeenCalled()
+  })
+})

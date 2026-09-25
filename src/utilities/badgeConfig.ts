@@ -3,6 +3,7 @@ import type {
   NestedDocsPageTreePluginBadgeMap,
   NestedDocsPageTreePluginResolvedBadgeConfig,
 } from '../types.js'
+
 import { nestedDocsPageTreePluginBadgeStatuses } from '../types.js'
 
 function normalizeBadgeMap(value: unknown): NestedDocsPageTreePluginBadgeMap {

@@ -5,26 +5,26 @@ import { buildPageTreeDocs, getVisibleTreeDocs, type PageTreeSourceDoc } from '.
 type DocInput = {
   _order?: string
   createdAt?: string
-  folder?: number | null
+  folder?: null | number
   id: number
-  parent?: number | null
+  parent?: null | number
   slug?: string
   title: string
 }
 
 const buildDocs = (docs: DocInput[]): PageTreeSourceDoc[] =>
   docs.map((doc) => ({
-    _order: doc._order,
-    createdAt: doc.createdAt ?? '2026-01-01T00:00:00.000Z',
-    folder: doc.folder ?? null,
     id: doc.id,
-    parent: doc.parent ?? null,
     slug:
       doc.slug ??
       doc.title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, ''),
+    _order: doc._order,
+    createdAt: doc.createdAt ?? '2026-01-01T00:00:00.000Z',
+    folder: doc.folder ?? null,
+    parent: doc.parent ?? null,
     title: doc.title,
   }))
 
@@ -63,11 +63,11 @@ describe('buildPageTreeDocs', () => {
 
   it('sorts nested siblings by manual order while preserving hierarchy', () => {
     const docs = buildDocs([
-      { _order: 'b', id: 40, title: 'Root B' },
-      { _order: 'b', id: 41, parent: 40, title: 'Child B' },
-      { _order: 'a', id: 42, parent: 40, title: 'Child A' },
-      { _order: 'a', id: 43, title: 'Root A' },
-      { _order: 'a', id: 44, parent: 41, title: 'Grandchild A' },
+      { id: 40, _order: 'b', title: 'Root B' },
+      { id: 41, _order: 'b', parent: 40, title: 'Child B' },
+      { id: 42, _order: 'a', parent: 40, title: 'Child A' },
+      { id: 43, _order: 'a', title: 'Root A' },
+      { id: 44, _order: 'a', parent: 41, title: 'Grandchild A' },
     ])
 
     const ordered = buildPageTreeDocs(docs, { sort: '_order' })
@@ -91,8 +91,8 @@ describe('buildPageTreeDocs', () => {
 
   it('supports custom parent field slugs', () => {
     const docs = buildDocs([
-      { folder: null, id: 20, title: 'Guides' },
-      { folder: 20, id: 21, title: 'Getting Started' },
+      { id: 20, folder: null, title: 'Guides' },
+      { id: 21, folder: 20, title: 'Getting Started' },
     ])
 
     expect(
@@ -117,10 +117,10 @@ describe('buildPageTreeDocs', () => {
 
   it('sorts fractional-indexing keys lexicographically, not numerically', () => {
     const docs = buildDocs([
-      { _order: 'ab', id: 100, title: 'Services' },
-      { _order: 'a5', id: 101, parent: 100, title: 'Strategy' },
-      { _order: 'a53', id: 102, parent: 100, title: 'Company News' },
-      { _order: 'a5i', id: 103, parent: 100, title: 'Design' },
+      { id: 100, _order: 'ab', title: 'Services' },
+      { id: 101, _order: 'a5', parent: 100, title: 'Strategy' },
+      { id: 102, _order: 'a53', parent: 100, title: 'Company News' },
+      { id: 103, _order: 'a5i', parent: 100, title: 'Design' },
     ])
 
     expect(

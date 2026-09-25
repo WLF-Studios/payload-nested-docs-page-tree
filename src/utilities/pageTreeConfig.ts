@@ -1,12 +1,13 @@
 import type { CollectionConfig } from 'payload'
 
 import type { NestedDocsPageTreePluginCollectionCustom } from '../types.js'
+
 import { nestedDocsPageTreePluginCustomKey } from '../types.js'
 import { normalizeNestedDocsPageTreePluginBadgeConfig } from './badgeConfig.js'
 
 export function getCollectionPageTreeConfig(
   collection: Pick<CollectionConfig, 'custom'>,
-): null | NestedDocsPageTreePluginCollectionCustom {
+): NestedDocsPageTreePluginCollectionCustom | null {
   const value = collection.custom?.[nestedDocsPageTreePluginCustomKey]
 
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -37,6 +38,8 @@ export function getCollectionPageTreeConfig(
     homeIndicator: {
       enabled: config.homeIndicator.enabled,
     },
+    localeBadgeStatus: config.localeBadgeStatus,
+    localeBadgeVisibility: config.localeBadgeVisibility,
     parentFieldSlug: config.parentFieldSlug,
   }
 }

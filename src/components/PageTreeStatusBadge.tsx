@@ -20,10 +20,12 @@ import { PageTreeLocaleStatusBadges } from './PageTreeLocaleStatusBadges.js'
 export function PageTreeStatusBadge({
   badgeConfig,
   badgesLinks,
+  collectionSlug,
   doc,
 }: {
   badgeConfig: NestedDocsPageTreePluginResolvedBadgeConfig
   badgesLinks?: NestedDocsPageTreePluginBadgesLinks
+  collectionSlug?: string
   doc: PageTreeSourceDoc
 }) {
   const { t } = useTranslation()
@@ -31,6 +33,8 @@ export function PageTreeStatusBadge({
     return (
       <PageTreeLocaleStatusBadges
         badgeConfig={badgeConfig}
+        collectionSlug={collectionSlug}
+        docID={doc.id}
         statuses={doc.__pageTreeLocaleStatuses}
       />
     )

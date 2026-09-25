@@ -33,11 +33,11 @@ const Pages: CollectionConfig = {
   },
   fields: [
     { name: 'title', type: 'text', required: true },
-    { name: 'parent', relationTo: 'pages', type: 'relationship' },
+    { name: 'parent', type: 'relationship', relationTo: 'pages' },
     {
-      fields: [{ name: 'label', type: 'text' }],
       name: 'breadcrumbs',
       type: 'array',
+      fields: [{ name: 'label', type: 'text' }],
     },
   ],
   versions: {

@@ -1,4 +1,4 @@
-import type { CollectionSlug } from 'payload'
+import type { CollectionSlug, PayloadRequest } from 'payload'
 
 import type { NestedDocsPageTreePluginDiagnosticsConfig } from './utilities/diagnostics.js'
 
@@ -30,14 +30,31 @@ export type NestedDocsPageTreePluginResolvedBadgeConfig = {
 }
 
 export type NestedDocsPageTreePluginHomeIndicatorConfig =
-  | false
   | {
       collections?: CollectionSlug[]
     }
+  | false
 
 export type NestedDocsPageTreePluginResolvedHomeIndicatorConfig = {
   enabled: boolean
 }
+
+export type PageTreeLocaleBadgeVisibility = (args: {
+  /** Latest draft document with all locales, read with the current user's access. */
+  doc: Record<string, unknown>
+  locale: string
+  req: PayloadRequest
+}) => boolean
+
+export type PageTreeLocaleBadgeStatus = (args: {
+  /** Latest draft document with all locales, read with the current user's access. */
+  doc: Record<string, unknown>
+  locale: string
+  /** Current document, if readable. Check its locale status before treating it as published. */
+  publishedDoc?: Record<string, unknown>
+  req: PayloadRequest
+  status: PageTreeLocaleStatus['status']
+}) => PageTreeLocaleStatus['status']
 
 export type NestedDocsPageTreePluginConfig = {
   badges?: NestedDocsPageTreePluginBadgeConfig
@@ -56,6 +73,10 @@ export type NestedDocsPageTreePluginConfig = {
   disabled?: boolean
   hideBreadcrumbs?: boolean
   homeIndicator?: NestedDocsPageTreePluginHomeIndicatorConfig
+  /** Server-only display override. Does not change stored publication status. */
+  localeBadgeStatus?: PageTreeLocaleBadgeStatus
+  /** Server-only rule. False hides the badge while preserving its aligned slot. */
+  localeBadgeVisibility?: PageTreeLocaleBadgeVisibility
   parentFieldSlug?: string
   /**
    * Publish a hierarchy move immediately instead of staging it as a draft - but
@@ -80,6 +101,8 @@ export type NestedDocsPageTreePluginCollectionCustom = {
   defaultLimit: number
   hideBreadcrumbs: boolean
   homeIndicator: NestedDocsPageTreePluginResolvedHomeIndicatorConfig
+  localeBadgeStatus?: PageTreeLocaleBadgeStatus
+  localeBadgeVisibility?: PageTreeLocaleBadgeVisibility
   parentFieldSlug: string
 }
 
@@ -100,16 +123,17 @@ export type PageTreeStatusLinks = {
 export type PageTreeLocaleStatus = {
   locale: string
   status: 'changed' | 'draft' | 'published' | 'unknown'
+  visible?: boolean
 }
 
-export type PageTreeSourceDoc = Record<string, unknown> & {
+export type PageTreeSourceDoc = {
   __pageTreeLocaleStatuses?: PageTreeLocaleStatus[]
   __pageTreeStatusLinks?: PageTreeStatusLinks
   _displayStatus?: null | string
   _status?: null | string
   id?: number | string
   slug?: null | string
-}
+} & Record<string, unknown>
 
 export const nestedDocsPageTreePluginCustomKey = 'nestedDocsPageTreePlugin'
 

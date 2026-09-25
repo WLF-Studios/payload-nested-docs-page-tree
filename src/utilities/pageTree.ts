@@ -343,8 +343,8 @@ export function buildPageTreeDocs(
 ): PageTreeDoc[] {
   const parentFieldSlug = options.parentFieldSlug ?? 'parent'
   const nodes: TreeNode[] = docs.map((doc, index) => ({
-    doc,
     id: stringifyDocID(doc.id),
+    doc,
     originalIndex: index,
     parentID: getDocParentID(doc, parentFieldSlug),
   }))
@@ -415,7 +415,7 @@ export function buildPageTreeDocs(
     const shadeLevel = getShadeLevel(rootMaxDepth, depth)
 
     orderedDocs.push({
-      ...(node.doc as PageTreeSourceDoc),
+      ...(node.doc),
       __pageTreeAncestorIDs: ancestorIDs,
       __pageTreeDepth: depth,
       __pageTreeHasChildren: children.length > 0,

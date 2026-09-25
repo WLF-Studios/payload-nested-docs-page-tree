@@ -46,6 +46,7 @@ function buildCollection(args: {
   wrapFieldsIn?: FieldContainer
 }): CollectionConfig {
   const {
+    slug,
     breadcrumbsFieldSlug = 'breadcrumbs',
     customListViewComponent,
     endpointPath,
@@ -54,7 +55,6 @@ function buildCollection(args: {
     orderable = false,
     paginationDefaultLimit,
     parentFieldSlug = 'parent',
-    slug,
     useAsTitle = 'title',
     wrapFieldsIn,
   } = args
@@ -68,21 +68,21 @@ function buildCollection(args: {
   if (includeParent) {
     fields.push({
       name: parentFieldSlug,
-      relationTo: slug,
       type: 'relationship',
+      relationTo: slug,
     })
   }
 
   if (includeBreadcrumbs) {
     fields.push({
+      name: breadcrumbsFieldSlug,
+      type: 'array',
       fields: [
         {
           name: 'label',
           type: 'text',
         },
       ],
-      name: breadcrumbsFieldSlug,
-      type: 'array',
     })
   }
 
@@ -176,7 +176,7 @@ describe('nestedDocsPageTreePlugin', () => {
       draftHasPublishedVersion: 'preview' as const,
       liveURL: 'https://example.com',
     }
-    const config = nestedDocsPageTreePlugin({ collections: ['pages'], badgesLinks })(
+    const config = nestedDocsPageTreePlugin({ badgesLinks, collections: ['pages'] })(
       buildConfig([pages]),
     )
     const collection = config.collections![0]
@@ -292,8 +292,8 @@ describe('nestedDocsPageTreePlugin', () => {
     })(
       buildConfig([
         buildCollection({
-          paginationDefaultLimit: 25,
           slug: 'pages',
+          paginationDefaultLimit: 25,
         }),
       ]),
     )
@@ -308,7 +308,7 @@ describe('nestedDocsPageTreePlugin', () => {
     const enabledConfig = nestedDocsPageTreePlugin({
       collections: ['pages'],
       diagnostics: true,
-    })(buildConfig([buildCollection({ orderable: true, slug: 'pages' })]))
+    })(buildConfig([buildCollection({ slug: 'pages', orderable: true })]))
 
     expect(disabledConfig.collections?.[0]?.hooks?.afterChange).toBeUndefined()
     expect(enabledConfig.collections?.[0]?.hooks?.afterChange).toHaveLength(1)
@@ -429,8 +429,8 @@ describe('nestedDocsPageTreePlugin', () => {
       })(
         buildConfig([
           buildCollection({
-            includeParent: false,
             slug: 'pages',
+            includeParent: false,
           }),
         ]),
       ),
@@ -442,8 +442,8 @@ describe('nestedDocsPageTreePlugin', () => {
       })(
         buildConfig([
           buildCollection({
-            includeBreadcrumbs: false,
             slug: 'pages',
+            includeBreadcrumbs: false,
           }),
         ]),
       ),
@@ -457,8 +457,8 @@ describe('nestedDocsPageTreePlugin', () => {
       })(
         buildConfig([
           buildCollection({
-            customListViewComponent: 'custom/path#ListView',
             slug: 'pages',
+            customListViewComponent: 'custom/path#ListView',
           }),
         ]),
       ),
@@ -470,8 +470,8 @@ describe('nestedDocsPageTreePlugin', () => {
       })(
         buildConfig([
           buildCollection({
-            endpointPath: '/:id/move',
             slug: 'pages',
+            endpointPath: '/:id/move',
           }),
         ]),
       ),
@@ -483,9 +483,9 @@ describe('nestedDocsPageTreePlugin', () => {
       })(
         buildConfig([
           buildCollection({
+            slug: 'pages',
             endpointPath: '/:id/reorder',
             orderable: true,
-            slug: 'pages',
           }),
         ]),
       ),

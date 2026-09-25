@@ -1,6 +1,10 @@
 import type { CollectionSlug, Payload, PayloadRequest } from 'payload'
 
-import type { PageTreeSourceDoc } from '../types.js'
+import type {
+  PageTreeLocaleBadgeStatus,
+  PageTreeLocaleBadgeVisibility,
+  PageTreeSourceDoc,
+} from '../types.js'
 
 import { getPageTreeDisplayStatus } from './status.js'
 
@@ -15,12 +19,16 @@ function readLocaleStatus(value: unknown, locale: string): string | undefined {
 export async function withPageTreeLocaleStatuses({
   collectionSlug,
   docs,
+  localeBadgeStatus,
+  localeBadgeVisibility,
   locales,
   payload,
   req,
 }: {
   collectionSlug: CollectionSlug
   docs: PageTreeSourceDoc[]
+  localeBadgeStatus?: PageTreeLocaleBadgeStatus
+  localeBadgeVisibility?: PageTreeLocaleBadgeVisibility
   locales: string[]
   payload: Payload
   req: PayloadRequest
@@ -45,25 +53,38 @@ export async function withPageTreeLocaleStatuses({
         pagination: false,
         // Payload mutates the request locale for Local API calls.
         req: { ...req, query: { ...req.query } },
-        select: { id: true, _status: true },
+        // Only opt-in callbacks need document content. Keep the two batched queries.
+        select:
+          localeBadgeStatus || (draft && localeBadgeVisibility)
+            ? undefined
+            : { id: true, _status: true },
         where: { id: { in: ids } },
       }),
     ),
   )
-  const draftByID = new Map(draftResult.docs.map((doc) => [String(doc.id), doc._status]))
-  const currentByID = new Map(currentResult.docs.map((doc) => [String(doc.id), doc._status]))
+  const draftByID = new Map(draftResult.docs.map((doc) => [String(doc.id), doc]))
+  const currentByID = new Map(currentResult.docs.map((doc) => [String(doc.id), doc]))
 
   return docs.map((doc) => ({
     ...doc,
     __pageTreeLocaleStatuses: locales.map((locale) => {
-      const draft = readLocaleStatus(draftByID.get(String(doc.id)), locale)
-      const current = readLocaleStatus(currentByID.get(String(doc.id)), locale)
+      const draftDoc = draftByID.get(String(doc.id))
+      const draft = readLocaleStatus(draftDoc?._status, locale)
+      const publishedDoc = currentByID.get(String(doc.id))
+      const current = readLocaleStatus(publishedDoc?._status, locale)
+      const status = getPageTreeDisplayStatus({
+        _displayStatus: draft === 'draft' && current === 'published' ? 'changed' : undefined,
+        _status: draft,
+      })
       return {
         locale,
-        status: getPageTreeDisplayStatus({
-          _displayStatus: draft === 'draft' && current === 'published' ? 'changed' : undefined,
-          _status: draft,
-        }),
+        ...(localeBadgeVisibility
+          ? { visible: Boolean(draftDoc && localeBadgeVisibility({ doc: draftDoc, locale, req })) }
+          : {}),
+        status:
+          localeBadgeStatus && draftDoc
+            ? localeBadgeStatus({ doc: draftDoc, locale, publishedDoc, req, status })
+            : status,
       }
     }),
   }))

@@ -440,6 +440,7 @@
   flex-grow: 1;
 }
 
+.root :global(a.pages-hierarchy-locale-status-badge),
 .root :global(.pages-hierarchy-locale-status-badge) {
   column-gap: 0.25rem;
   letter-spacing: normal;

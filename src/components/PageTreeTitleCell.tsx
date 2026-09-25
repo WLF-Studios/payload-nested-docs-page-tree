@@ -161,7 +161,7 @@ export function PageTreeTitleCell({
           ref={rowDnd?.orderHandleRef}
           type="button"
         >
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg fill="none" height="20" viewBox="0 0 20 20" width="20" xmlns="http://www.w3.org/2000/svg">
       <path d="M7.125 6C7.95343 6 8.625 5.32843 8.625 4.5C8.625 3.67157 7.95343 3 7.125 3C6.29657 3 5.625 3.67157 5.625 4.5C5.625 5.32843 6.29657 6 7.125 6Z" fill="currentColor"/>
       <path d="M7.125 12C7.95343 12 8.625 11.3284 8.625 10.5C8.625 9.67157 7.95343 9 7.125 9C6.29657 9 5.625 9.67157 5.625 10.5C5.625 11.3284 6.29657 12 7.125 12Z" fill="currentColor"/>
       <path d="M7.125 18C7.95343 18 8.625 17.3284 8.625 16.5C8.625 15.6716 7.95343 15 7.125 15C6.29657 15 5.625 15.6716 5.625 16.5C5.625 17.3284 6.29657 18 7.125 18Z" fill="currentColor"/>

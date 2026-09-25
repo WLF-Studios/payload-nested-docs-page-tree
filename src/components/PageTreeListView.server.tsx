@@ -34,7 +34,7 @@ function isNumericSegment(segment: string): boolean {
 }
 
 function getKeySegments(key: string): string[] {
-  const matches = key.match(/([^[\]]+)/g)
+  const matches = key.match(/[^[\]]+/g)
   return matches ? matches.filter(Boolean) : [key]
 }
 
@@ -122,7 +122,7 @@ function parseSearchParams(searchParams?: Params): ParsedQuery {
   for (const key of ['columns', 'queryByGroup']) {
     if (typeof parsed[key] === 'string') {
       try {
-        parsed[key] = JSON.parse(parsed[key] as string)
+        parsed[key] = JSON.parse(parsed[key])
       } catch {
         // Leave invalid persisted values untouched and let Payload ignore them.
       }
@@ -248,11 +248,11 @@ function getCurrentQuery(props: ServerListViewProps, fallbackLimit: number): Lis
   return {
     ...mergedQuery,
     limit: normalizeLimit(
-      getQueryValue(mergedQuery.limit as number | undefined, fallbackLimit),
+      getQueryValue(mergedQuery.limit, fallbackLimit),
       fallbackLimit,
     ),
     page: normalizePage(
-      getQueryValue(mergedQuery.page as number | undefined, props.data.page),
+      getQueryValue(mergedQuery.page, props.data.page),
       props.data.page,
     ),
     search: normalizeSearch(mergedQuery.search),
@@ -502,6 +502,8 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     ? await withPageTreeLocaleStatuses({
         collectionSlug: props.collectionSlug,
         docs: fullResult.docs as PageTreeSourceDoc[],
+        localeBadgeStatus: pageTreeConfig.localeBadgeStatus,
+        localeBadgeVisibility: pageTreeConfig.localeBadgeVisibility,
         locales: statusLocales,
         payload: props.payload,
         req,
@@ -553,7 +555,7 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     permissions: props.permissions,
   } as never)
   const fieldPermissions = props.permissions?.collections?.[props.collectionSlug]?.fields ?? true
-  const renderedTable = await renderTable({
+  const renderedTable = renderTable({
     clientCollectionConfig,
     clientConfig,
     collectionConfig: props.collectionConfig,
@@ -570,14 +572,14 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     useAsTitle: props.collectionConfig.admin.useAsTitle,
     viewType: props.viewType,
   } as never)
-  const clientProps: Omit<ListViewClientProps, 'Table' | 'columnState'> = {
+  const clientProps: Omit<ListViewClientProps, 'columnState' | 'Table'> = {
     AfterList: props.AfterList,
     AfterListTable: props.AfterListTable,
+    beforeActions: props.beforeActions,
     BeforeList: props.BeforeList,
     BeforeListTable: props.BeforeListTable,
-    Description: props.Description,
-    beforeActions: props.beforeActions,
     collectionSlug: props.collectionSlug,
+    Description: props.Description,
     disableBulkDelete: props.disableBulkDelete,
     disableBulkEdit: props.disableBulkEdit,
     disableQueryPresets: props.disableQueryPresets,
