@@ -89,13 +89,14 @@ describe('NestedDocsPageTreeListView', () => {
     expect(cookie).toBe('payload-tenant=tenant-1')
   })
 
-  it('passes both version-specific URLs to the client using a single accessible current-row read', async () => {
+  it.each([false, true])('passes version-specific URLs with callback=%s using one accessible current-row read', async (callback) => {
     payloadMocks.extractJWT.mockClear()
     const currentDoc = {
       id: 1,
       slug: 'old',
       _status: 'published',
       breadcrumbs: [{ url: '/parent/old' }],
+      tenant: 'tenant-1',
     }
     const draftDoc = {
       id: 1,
@@ -115,10 +116,12 @@ describe('NestedDocsPageTreeListView', () => {
       slug: 'second-new',
       breadcrumbs: [{ url: '/second-new' }],
     }
-    const find = vi.fn(({ draft, fallbackLocale, locale, overrideAccess }) => {
+    const find = vi.fn(({ depth, draft, fallbackLocale, locale, overrideAccess, select }) => {
       expect(overrideAccess).toBe(false)
       expect(locale).toBe('en')
       expect(fallbackLocale).toBe(false)
+      expect(depth).toBe(0)
+      if (!draft && callback) { expect(select).toBeUndefined() }
       return Promise.resolve({
         docs: draft ? [draftDoc, secondDraftDoc] : [currentDoc, secondCurrentDoc],
       })
@@ -133,7 +136,16 @@ describe('NestedDocsPageTreeListView', () => {
       custom: {
         nestedDocsPageTreePlugin: {
           badges: { colors: {}, labels: {} },
-          badgesLinks: { liveURL: 'https://example.com' },
+          badgesLinks: {
+            liveURL: callback
+              ? ({ doc, locale, path, req }: {
+                  doc: PageTreeSourceDoc; locale?: null | string; path?: string; req: PayloadRequest
+                }) => {
+                  expect(req.headers.get('cookie')).toBe('payload-tenant=tenant-1')
+                  return Promise.resolve(`https://${String(doc.tenant)}.example.com/${locale}${path}`)
+                }
+              : 'https://example.com',
+          },
           breadcrumbsFieldSlug: 'breadcrumbs',
           defaultLimit: 100,
           hideBreadcrumbs: true,
@@ -166,7 +178,9 @@ describe('NestedDocsPageTreeListView', () => {
       slug: 'new',
       __pageTreeStatusLinks: {
         previewURL: 'https://cms.example.com/preview/new-parent/new',
-        publicURL: 'https://example.com/parent/old',
+        publicURL: callback
+          ? 'https://tenant-1.example.com/en/parent/old'
+          : 'https://example.com/parent/old',
       },
       _displayStatus: 'changed',
     })
@@ -175,7 +189,7 @@ describe('NestedDocsPageTreeListView', () => {
     )
     expect(find).toHaveBeenCalledTimes(2)
     expect(payloadMocks.extractJWT).toHaveBeenCalledTimes(1)
-    expect(result.props.badgesLinks).toEqual({ liveURL: 'https://example.com' })
+    expect(result.props.badgesLinks).toEqual(callback ? {} : { liveURL: 'https://example.com' })
   })
 })
 

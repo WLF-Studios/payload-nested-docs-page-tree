@@ -321,11 +321,14 @@ async function getDocsWithDisplayStatus(args: {
         overrideAccess: false,
         pagination: false,
         req,
-        select: {
-          id: true,
-          _status: true,
-          ...(badgesLinks?.liveURL ? { [breadcrumbsFieldSlug]: true } : {}),
-        },
+        select:
+          typeof badgesLinks?.liveURL === 'function'
+            ? undefined
+            : {
+                id: true,
+                _status: true,
+                ...(badgesLinks?.liveURL ? { [breadcrumbsFieldSlug]: true } : {}),
+              },
         user,
         where: {
           id: {
@@ -598,13 +601,17 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     viewType: props.viewType,
   }
   const canMoveDocs = Boolean(props.permissions?.collections?.[props.collectionSlug]?.update)
+  const badgesLinks = pageTreeConfig.badgesLinks ? { ...pageTreeConfig.badgesLinks } : undefined
+  if (typeof badgesLinks?.liveURL === 'function') {
+    delete badgesLinks.liveURL
+  }
 
   return (
     <PageTreeListViewClient
       {...clientProps}
       allDocs={orderedDocs}
       badgeConfig={pageTreeConfig.badges}
-      badgesLinks={pageTreeConfig.badgesLinks}
+      badgesLinks={badgesLinks}
       canMoveDocs={canMoveDocs}
       columnState={renderedTable.columnState}
       homeIndicatorEnabled={pageTreeConfig.homeIndicator.enabled}

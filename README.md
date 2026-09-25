@@ -198,19 +198,42 @@ Published badges open live with a right-side link icon; draft-only badges open p
 | `'preview'` | Whole badge, including the right-side eye icon, opens preview |
 | `'both'` (default) | Body with link icon opens live; eye icon after a separator opens preview |
 
-- **Live:** Uses the published document's last breadcrumb URL and `liveURL`. Breadcrumbs must match your frontend routes. Omit `liveURL` for preview links only.
+- **Live:** A string `liveURL` is the base URL for the published document's last breadcrumb path. Alternatively, pass a sync or async callback returning the final URL for tenant domains or localized routes. Omit `liveURL` for preview links only.
 - **Preview:** Uses the collection's [`admin.preview`](https://payloadcms.com/docs/admin/preview) callback. Your frontend must serve draft content.
 
 All live and preview links open in new tabs. Unlinked badges have no icon. Omit `badgesLinks` to keep single status badges unlinked, even with preview configured. Locale badges still link to the editor.
 
 `badgesLinks.showIcons` defaults to `true`: live links use Payload's chain-link `LinkIcon`, and preview links use `EyeIcon`. Set it to `false` to hide inline badge icons; in `'both'` mode, the separate preview action still shows `ExternalLinkIcon` after the separator.
 
+For example, with a `tenant` relationship on pages and a `domain` field on tenants:
+
+```ts
+badgesLinks: {
+  liveURL: async ({ doc, locale, path, req }) => {
+    if (!path || (typeof doc.tenant !== 'string' && typeof doc.tenant !== 'number')) {
+      return null
+    }
+
+    const tenant = await req.payload.findByID({
+      collection: 'tenants',
+      id: doc.tenant,
+      overrideAccess: false,
+      req,
+    })
+
+    return new URL(`${locale ? `/${locale}` : ''}${path}`, `https://${tenant.domain}`).href
+  },
+},
+```
+
+The callback receives `{ collectionSlug, doc, locale, path, req }`. `doc` is the readable published document at depth `0`, so relationships contain IDs. `locale` is the selected admin locale, or `undefined` without localization. `path` is the last published breadcrumb URL from `breadcrumbsFieldSlug`, or `undefined` when unavailable. The callback can build its own route without breadcrumbs. It runs only when a live destination is needed and a readable published document exists, and stays on the server. The `PageTreeLiveURL` type is exported for standalone callbacks.
+
 <details>
 <summary>URL resolution and unavailable links</summary>
 
-Live links use `breadcrumbsFieldSlug` and the published path, unaffected by draft slug or parent changes. Preview receives the latest saved draft, locale, request, and user token. Unsaved changes and `admin.livePreview.url` are not used.
+String live links use `breadcrumbsFieldSlug` and the published path, unaffected by draft slug or parent changes. Callback results are used as final URLs without appending the breadcrumb path. Relative callback URLs resolve against the CMS request URL; return an absolute URL for a separate frontend. Only HTTP and HTTPS links are accepted. Preview receives the latest saved draft, locale, request, and user token. Unsaved changes and `admin.livePreview.url` are not used.
 
-Missing breadcrumbs, missing or invalid URLs, or a failing preview callback disable only that link. In `'both'` mode, no live URL leaves the body as text; no preview URL hides the icon. Single-link modes never switch destinations. The selected mode is independent of the badge label.
+Missing breadcrumbs for string live URLs, missing or invalid URLs, or a failing live or preview callback disable only that link. Return `null`, `undefined`, or an empty string from the live callback to leave the live destination unlinked. In `'both'` mode, no live URL leaves the body as text; no preview URL hides the icon. Single-link modes never switch destinations. The selected mode is independent of the badge label.
 
 </details>
 

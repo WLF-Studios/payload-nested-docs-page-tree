@@ -27,7 +27,7 @@ export type BadgeLinkCollectionConfig<TRequest extends BadgeLinkRequest> = {
 }
 
 export async function resolvePageTreeBadgeLinks<TRequest extends BadgeLinkRequest>(args: {
-  badgesLinks?: NestedDocsPageTreePluginBadgesLinks
+  badgesLinks?: NestedDocsPageTreePluginBadgesLinks<TRequest>
   breadcrumbsFieldSlug: string
   collectionConfig: BadgeLinkCollectionConfig<TRequest>
   draftDoc: PageTreeSourceDoc
@@ -77,9 +77,21 @@ export async function resolvePageTreeBadgeLinks<TRequest extends BadgeLinkReques
     publishedDoc?._status === 'published'
   ) {
     const breadcrumbs = publishedDoc[breadcrumbsFieldSlug]
-    const path: unknown = Array.isArray(breadcrumbs) ? breadcrumbs.at(-1)?.url : undefined
-    if (typeof path === 'string' && path.trim()) {
-      await resolve('publicURL', () => new URL(path.trim(), badgesLinks.liveURL).href)
+    const breadcrumbURL: unknown = Array.isArray(breadcrumbs) ? breadcrumbs.at(-1)?.url : undefined
+    const path = typeof breadcrumbURL === 'string' ? breadcrumbURL.trim() || undefined : undefined
+    const liveURL = badgesLinks.liveURL
+    if (typeof liveURL === 'function') {
+      await resolve('publicURL', () =>
+        liveURL({
+          collectionSlug: collectionConfig.slug,
+          doc: publishedDoc,
+          locale: req.locale ?? undefined,
+          path,
+          req,
+        }),
+      )
+    } else if (path) {
+      await resolve('publicURL', () => new URL(path, liveURL).href)
     }
   }
   if (

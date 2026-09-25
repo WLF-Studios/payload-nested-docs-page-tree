@@ -33,6 +33,74 @@ function fixture() {
 }
 
 describe('resolvePageTreeBadgeLinks', () => {
+  it.each([false, true])('resolves a tenant and locale URL with an async=%s callback', async (async) => {
+    const args = fixture()
+    const publishedDoc = { ...args.publishedDoc, tenant: 'tenant-1' }
+    const liveURL = vi.fn(({ collectionSlug, doc, locale, path, req }) => {
+      expect(doc).toBe(publishedDoc)
+      expect(req).toBe(args.req)
+      expect(collectionSlug).toBe('pages')
+      const url = `https://${doc.tenant}.example.com/${locale}${path}`
+      return async ? Promise.resolve(url) : url
+    })
+    expect(await resolvePageTreeBadgeLinks({
+      ...args, badgesLinks: { liveURL }, publishedDoc,
+    })).toEqual({
+      previewURL: 'https://preview.example.com/new-path',
+      publicURL: 'https://tenant-1.example.com/en/old-path',
+    })
+    expect(liveURL).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows callback routes without breadcrumbs', async () => {
+    const args = fixture()
+    const liveURL = vi.fn(({ doc, path }) => {
+      expect(path).toBeUndefined()
+      return `https://example.com/page/${doc.id}`
+    })
+    expect((await resolvePageTreeBadgeLinks({
+      ...args, badgesLinks: { liveURL },
+      publishedDoc: { ...args.publishedDoc, breadcrumbs: [] },
+    })).publicURL).toBe('https://example.com/page/1')
+  })
+
+  it.each([undefined, null, '', '  ', 'javascript:alert(1)', 'data:text/html,test', 'https://['])(
+    'omits invalid callback result %s while keeping preview', async (value) => {
+      expect(await resolvePageTreeBadgeLinks({
+        ...fixture(), badgesLinks: { liveURL: () => value },
+      })).toEqual({ previewURL: 'https://preview.example.com/new-path' })
+    },
+  )
+
+  it.each([false, true])('isolates an async=%s callback failure without logging secrets', async (async) => {
+    const args = fixture()
+    const liveURL = () => {
+      const error = new Error('secret-token')
+      if (async) { return Promise.reject(error) }
+      throw error
+    }
+    expect(await resolvePageTreeBadgeLinks({ ...args, badgesLinks: { liveURL } })).toEqual({
+      previewURL: 'https://preview.example.com/new-path',
+    })
+    expect(args.req.payload.logger.error).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(args.req.payload.logger.error.mock.calls)).not.toContain('secret-token')
+  })
+
+  it('does not call liveURL for draft-only, inaccessible or preview-only destinations', async () => {
+    const args = fixture()
+    const liveURL = vi.fn(() => 'https://example.com/')
+    for (const publishedDoc of [undefined, { ...args.publishedDoc, _status: 'draft' }]) {
+      await resolvePageTreeBadgeLinks({ ...args, badgesLinks: { liveURL }, publishedDoc })
+    }
+    await resolvePageTreeBadgeLinks({
+      ...args, badgesLinks: { draftHasPublishedVersion: 'preview', liveURL },
+    })
+    await resolvePageTreeBadgeLinks({
+      ...args, badgesLinks: { liveURL }, draftDoc: { ...args.draftDoc, _displayStatus: 'draft' },
+    })
+    expect(liveURL).not.toHaveBeenCalled()
+  })
+
   it('leaves all badges unlinked unless explicitly enabled', async () => {
     const args = fixture()
     args.collectionConfig.admin.preview = () => {

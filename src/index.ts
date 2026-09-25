@@ -261,6 +261,7 @@ export type {
   NestedDocsPageTreePluginBadgeStatus,
   NestedDocsPageTreePluginConfig,
   NestedDocsPageTreePluginHomeIndicatorConfig,
+  PageTreeLiveURL,
   PageTreeMoveContext,
 } from './types.js'
 

@@ -106,11 +106,21 @@ export type NestedDocsPageTreePluginCollectionCustom = {
   parentFieldSlug: string
 }
 
-export type NestedDocsPageTreePluginBadgesLinks = {
+export type PageTreeLiveURL<TRequest = PayloadRequest> = (args: {
+  collectionSlug: string
+  /** Published document read with the current user's access, at depth 0. */
+  doc: PageTreeSourceDoc
+  locale?: string
+  /** Published document's last breadcrumb URL, when available. */
+  path?: string
+  req: TRequest
+}) => null | Promise<null | string | undefined> | string | undefined
+
+export type NestedDocsPageTreePluginBadgesLinks<TRequest = PayloadRequest> = {
   /** Which links to offer for a draft with a published version. @default 'both' */
   draftHasPublishedVersion?: 'both' | 'live' | 'preview'
-  /** Website base URL, resolved with the published document's last breadcrumb URL. */
-  liveURL?: string
+  /** Website base URL, or a server-only callback returning the final live URL. */
+  liveURL?: PageTreeLiveURL<TRequest> | string
   /** Show live link and preview eye icons. When false, 'both' keeps an external-link preview action. @default true */
   showIcons?: boolean
 }
