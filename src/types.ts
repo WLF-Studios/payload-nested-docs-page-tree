@@ -73,6 +73,8 @@ export type NestedDocsPageTreePluginConfig = {
    */
   diagnostics?: NestedDocsPageTreePluginDiagnosticsConfig
   disabled?: boolean
+  /** Enable narrower tree and status queries. Declare extra cell, hook, or badge callback fields with collection.forceSelect. @default false */
+  fastMode?: boolean
   hideBreadcrumbs?: boolean
   homeIndicator?: NestedDocsPageTreePluginHomeIndicatorConfig
   /** Server-only display override. Does not change stored publication status. */
@@ -101,6 +103,7 @@ export type NestedDocsPageTreePluginCollectionCustom = {
   badgesLinks?: NestedDocsPageTreePluginBadgesLinks
   breadcrumbsFieldSlug: string
   defaultLimit: number
+  fastMode?: boolean
   hideBreadcrumbs: boolean
   homeIndicator: NestedDocsPageTreePluginResolvedHomeIndicatorConfig
   localeBadgeStatus?: PageTreeLocaleBadgeStatus

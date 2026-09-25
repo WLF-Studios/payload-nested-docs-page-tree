@@ -20,6 +20,7 @@ import React from 'react'
 import type { NestedDocsPageTreePluginBadgesLinks, PageTreeSourceDoc } from '../types.js'
 
 import { resolvePageTreeBadgeLinks } from '../utilities/badgeLinks.js'
+import { getPageTreeListSelect } from '../utilities/listSelect.js'
 import { withPageTreeLocaleStatuses } from '../utilities/localeStatus.js'
 import { buildPageTreeDocs } from '../utilities/pageTree.js'
 import { getCollectionPageTreeConfig } from '../utilities/pageTreeConfig.js'
@@ -286,6 +287,7 @@ async function getDocsWithDisplayStatus(args: {
   collectionConfig: ServerListViewProps['collectionConfig']
   collectionSlug: string
   docs: PageTreeSourceDoc[]
+  fastMode?: boolean
   locale?: string
   payload: any
   req: any
@@ -297,6 +299,7 @@ async function getDocsWithDisplayStatus(args: {
     collectionConfig,
     collectionSlug,
     docs,
+    fastMode,
     locale,
     payload,
     req,
@@ -322,7 +325,7 @@ async function getDocsWithDisplayStatus(args: {
         pagination: false,
         req,
         select:
-          typeof badgesLinks?.liveURL === 'function'
+          !fastMode || typeof badgesLinks?.liveURL === 'function'
             ? undefined
             : {
                 id: true,
@@ -480,6 +483,17 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     draft: props.collectionConfig.versions?.drafts ? true : undefined,
     fallbackLocale: false,
     includeLockStatus: true,
+    select:
+      pageTreeConfig.fastMode && !pageTreeConfig.badgesLinks
+        ? getPageTreeListSelect({
+            columns: props.columnState,
+            useAsTitle: props.collectionConfig.admin.useAsTitle,
+            parentFieldSlug: pageTreeConfig.parentFieldSlug,
+            breadcrumbsFieldSlug: pageTreeConfig.breadcrumbsFieldSlug,
+            orderableFieldName,
+            sort: effectiveSort,
+          })
+        : undefined,
     locale,
     overrideAccess: false,
     pagination: false,
@@ -505,6 +519,7 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     ? await withPageTreeLocaleStatuses({
         collectionSlug: props.collectionSlug,
         docs: fullResult.docs as PageTreeSourceDoc[],
+        fastMode: pageTreeConfig.fastMode,
         localeBadgeStatus: pageTreeConfig.localeBadgeStatus,
         localeBadgeVisibility: pageTreeConfig.localeBadgeVisibility,
         locales: statusLocales,
@@ -512,6 +527,7 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
         req,
       })
     : await getDocsWithDisplayStatus({
+        fastMode: pageTreeConfig.fastMode,
         badgesLinks: pageTreeConfig.badgesLinks,
         breadcrumbsFieldSlug: pageTreeConfig.breadcrumbsFieldSlug,
         collectionConfig: props.collectionConfig,

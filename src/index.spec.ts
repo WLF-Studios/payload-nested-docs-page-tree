@@ -168,6 +168,15 @@ function getFieldHiddenValue(
 }
 
 describe('nestedDocsPageTreePlugin', () => {
+  it.each([undefined, false, true])('normalizes fastMode=%s', (fastMode) => {
+    const config = nestedDocsPageTreePlugin({
+      collections: ['pages'], fastMode,
+    })(buildConfig([buildCollection({ slug: 'pages' })]))
+    expect(getCollectionPageTreeConfig(config.collections![0])).toMatchObject({
+      fastMode: fastMode === true,
+    })
+  })
+
   it('retains badge link options without replacing native preview', () => {
     const pages = buildCollection({ slug: 'pages' })
     const preview = () => 'https://preview.example.com'

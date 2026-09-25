@@ -18,7 +18,11 @@ describe('localized publication status integration', () => {
         {
           slug: 'pages',
           access: { read: () => true },
-          fields: [{ name: 'title', type: 'text', localized: true }],
+          fields: [
+            { name: 'title', type: 'text', localized: true },
+            { name: 'body', type: 'textarea' },
+          ],
+          forceSelect: { title: true },
           versions: { drafts: { localizeStatus: true } },
         },
       ],
@@ -40,10 +44,10 @@ describe('localized publication status integration', () => {
     await memoryDB?.stop()
   })
 
-  it('keeps English published when French has draft changes, then updates only French on publish', async () => {
+  it.each([false, true])('preserves locale statuses and callback fields with fastMode=%s', async (fastMode) => {
     const doc = await payload.create({
       collection: 'pages',
-      data: { _status: 'draft', title: 'English' },
+      data: { _status: 'draft', title: 'English', body: 'Unselected content' },
       draft: true,
       locale: 'en',
     })
@@ -69,6 +73,14 @@ describe('localized publication status integration', () => {
       withPageTreeLocaleStatuses({
         collectionSlug: 'pages',
         docs: [{ id: doc.id, title: 'French draft' }],
+        fastMode,
+        localeBadgeStatus: ({ doc: draftDoc, publishedDoc, status }) => {
+          expect(draftDoc.title).toMatchObject({ en: 'English', fr: 'French draft' })
+          expect(publishedDoc?.title).toHaveProperty('en', 'English')
+          expect(draftDoc.body).toBe(fastMode ? undefined : 'Unselected content')
+          expect(publishedDoc?.body).toBe(fastMode ? undefined : 'Unselected content')
+          return status
+        },
         locales: ['en', 'fr', 'lt', 'pl'],
         payload,
         req,

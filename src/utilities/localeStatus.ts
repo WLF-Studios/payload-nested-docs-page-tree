@@ -19,6 +19,7 @@ function readLocaleStatus(value: unknown, locale: string): string | undefined {
 export async function withPageTreeLocaleStatuses({
   collectionSlug,
   docs,
+  fastMode,
   localeBadgeStatus,
   localeBadgeVisibility,
   locales,
@@ -27,6 +28,7 @@ export async function withPageTreeLocaleStatuses({
 }: {
   collectionSlug: CollectionSlug
   docs: PageTreeSourceDoc[]
+  fastMode?: boolean
   localeBadgeStatus?: PageTreeLocaleBadgeStatus
   localeBadgeVisibility?: PageTreeLocaleBadgeVisibility
   locales: string[]
@@ -53,9 +55,7 @@ export async function withPageTreeLocaleStatuses({
         pagination: false,
         // Payload mutates the request locale for Local API calls.
         req: { ...req, query: { ...req.query } },
-        // Only opt-in callbacks need document content. Keep the two batched queries.
-        select:
-          localeBadgeStatus || localeBadgeVisibility ? undefined : { id: true, _status: true },
+        select: fastMode ? { id: true, _status: true } : undefined,
         where: { id: { in: ids } },
       }),
     ),

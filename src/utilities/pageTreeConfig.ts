@@ -34,6 +34,7 @@ export function getCollectionPageTreeConfig(
     badgesLinks: config.badgesLinks,
     breadcrumbsFieldSlug: config.breadcrumbsFieldSlug,
     defaultLimit: config.defaultLimit,
+    fastMode: config.fastMode === true,
     hideBreadcrumbs: config.hideBreadcrumbs,
     homeIndicator: {
       enabled: config.homeIndicator.enabled,

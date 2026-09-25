@@ -29,6 +29,27 @@ describe('locale badge visibility', () => {
     }
   }
 
+  it.each([undefined, false, true])('controls locale query selection with fastMode=%s', async (fastMode) => {
+    const { args, find } = setup()
+    const result = await withPageTreeLocaleStatuses({
+      ...args,
+      fastMode,
+      localeBadgeVisibility: ({ doc, locale }) =>
+        (doc.enabled as Record<string, boolean>)[locale] === true,
+    })
+    expect(find).toHaveBeenCalledTimes(2)
+    for (const [query] of find.mock.calls) {
+      expect(query).toMatchObject({
+        select: fastMode ? { id: true, _status: true } : undefined,
+        locale: 'all', overrideAccess: false, fallbackLocale: false,
+      })
+    }
+    expect(result[0].__pageTreeLocaleStatuses).toEqual([
+      { locale: 'en', status: 'changed', visible: true },
+      { locale: 'fr', status: 'draft', visible: false },
+    ])
+  })
+
   it('passes all-locale draft data to the rule and preserves status and locale order', async () => {
     const { args, find } = setup()
     const visibility = vi.fn(
@@ -116,7 +137,7 @@ describe('locale badge visibility', () => {
 
   it('preserves default visibility and narrow queries without a callback', async () => {
     const { args, find } = setup()
-    const result = await withPageTreeLocaleStatuses(args)
+    const result = await withPageTreeLocaleStatuses({ ...args, fastMode: true })
     expect(result[0].__pageTreeLocaleStatuses).toEqual([
       { locale: 'en', status: 'changed' },
       { locale: 'fr', status: 'draft' },

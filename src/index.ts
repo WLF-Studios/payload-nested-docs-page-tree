@@ -213,6 +213,7 @@ function buildCollectionCustom(args: {
   badgesLinks?: NestedDocsPageTreePluginConfig['badgesLinks']
   breadcrumbsFieldSlug: string
   defaultLimit: number
+  fastMode: boolean
   hideBreadcrumbs: boolean
   homeIndicator: NestedDocsPageTreePluginCollectionCustom['homeIndicator']
   localeBadgeStatus?: NestedDocsPageTreePluginConfig['localeBadgeStatus']
@@ -224,6 +225,7 @@ function buildCollectionCustom(args: {
     badgesLinks,
     breadcrumbsFieldSlug,
     defaultLimit,
+    fastMode,
     hideBreadcrumbs,
     homeIndicator,
     localeBadgeStatus,
@@ -236,6 +238,7 @@ function buildCollectionCustom(args: {
     badgesLinks,
     breadcrumbsFieldSlug,
     defaultLimit,
+    fastMode,
     hideBreadcrumbs,
     homeIndicator,
     localeBadgeStatus,
@@ -280,6 +283,7 @@ export const nestedDocsPageTreePlugin =
 
     const breadcrumbsFieldSlug =
       pluginOptions.breadcrumbsFieldSlug ?? DEFAULT_BREADCRUMBS_FIELD_SLUG
+    const fastMode = pluginOptions.fastMode === true
     const defaultLimit = pluginOptions.defaultLimit ?? DEFAULT_LIMIT
     const hideBreadcrumbs = pluginOptions.hideBreadcrumbs ?? true
     const parentFieldSlug = pluginOptions.parentFieldSlug ?? DEFAULT_PARENT_FIELD_SLUG
@@ -351,6 +355,7 @@ export const nestedDocsPageTreePlugin =
             badgesLinks: pluginOptions.badgesLinks,
             breadcrumbsFieldSlug,
             defaultLimit,
+            fastMode,
             hideBreadcrumbs,
             homeIndicator: {
               enabled: homeIndicatorCollectionSlugs.has(collection.slug),

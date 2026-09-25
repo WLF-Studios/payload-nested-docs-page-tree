@@ -37,7 +37,7 @@ vi.mock('./PageTreeListView.client.js', () => ({
 }))
 
 describe('NestedDocsPageTreeListView', () => {
-  it('passes the incoming request headers to the collection base filter', async () => {
+  it.each([undefined, false, true])('selects tree fields only with fastMode=%s', async (fastMode) => {
     let cookie: null | string = null
     const baseFilter = ({ req }: { req: PayloadRequest }) => {
       cookie = req.headers.get('cookie')
@@ -48,6 +48,7 @@ describe('NestedDocsPageTreeListView', () => {
       slug: 'pages',
       admin: {
         baseFilter,
+        enableListViewSelectAPI: true,
         useAsTitle: 'title',
       },
       custom: {
@@ -56,6 +57,7 @@ describe('NestedDocsPageTreeListView', () => {
             colors: {},
             labels: {},
           },
+          fastMode,
           breadcrumbsFieldSlug: 'breadcrumbs',
           defaultLimit: 100,
           hideBreadcrumbs: true,
@@ -68,28 +70,52 @@ describe('NestedDocsPageTreeListView', () => {
     }
     configMocks.getClientConfig.mockReturnValue({ collections: [collectionConfig] })
 
+    const find = vi.fn((_args: { select?: unknown }) => Promise.resolve({ docs: [] }))
     await NestedDocsPageTreeListView({
       collectionConfig,
       collectionSlug: 'pages',
-      columnState: [],
+      columnState: [
+        { accessor: 'meta.title', active: true },
+        { accessor: 'layout', active: false },
+      ],
       data: {
         page: 1,
       },
       i18n: { t: (key: string) => key },
-      listPreferences: {},
+      listPreferences: { sort: ['-publishedAt', 'meta.rank', 'title'] },
       payload: {
         config: {
           i18n: { fallbackLanguage: 'en' },
         },
-        find: vi.fn(() => Promise.resolve({ docs: [] })),
+        find,
       },
       user: null,
     })
 
     expect(cookie).toBe('payload-tenant=tenant-1')
+    expect(find.mock.calls[0][0].select).toEqual(
+      fastMode
+        ? {
+            id: true,
+            slug: true,
+            _status: true,
+            title: true,
+            parent: true,
+            breadcrumbs: true,
+            publishedAt: true,
+            meta: { title: true, rank: true },
+          }
+        : undefined,
+    )
   })
 
-  it.each([false, true])('passes version-specific URLs with callback=%s using one accessible current-row read', async (callback) => {
+  it.each([
+    { callback: false, fastMode: undefined },
+    { callback: false, fastMode: false },
+    { callback: false, fastMode: true },
+    { callback: true, fastMode: false },
+    { callback: true, fastMode: true },
+  ])('preserves badge URLs and controls status selection with %j', async ({ callback, fastMode }) => {
     payloadMocks.extractJWT.mockClear()
     const currentDoc = {
       id: 1,
@@ -121,7 +147,12 @@ describe('NestedDocsPageTreeListView', () => {
       expect(locale).toBe('en')
       expect(fallbackLocale).toBe(false)
       expect(depth).toBe(0)
-      if (!draft && callback) { expect(select).toBeUndefined() }
+      if (draft) { expect(select).toBeUndefined() }
+      if (!draft) {
+        expect(select).toEqual(fastMode && !callback
+          ? { id: true, _status: true, breadcrumbs: true }
+          : undefined)
+      }
       return Promise.resolve({
         docs: draft ? [draftDoc, secondDraftDoc] : [currentDoc, secondCurrentDoc],
       })
@@ -129,6 +160,7 @@ describe('NestedDocsPageTreeListView', () => {
     const collectionConfig = {
       slug: 'pages',
       admin: {
+        enableListViewSelectAPI: true,
         preview: (doc: typeof draftDoc, { req }: { req: PayloadRequest }) =>
           `${req.protocol}//${req.host}/preview${doc.breadcrumbs[0].url}`,
         useAsTitle: 'title',
@@ -136,6 +168,7 @@ describe('NestedDocsPageTreeListView', () => {
       custom: {
         nestedDocsPageTreePlugin: {
           badges: { colors: {}, labels: {} },
+          fastMode,
           badgesLinks: {
             liveURL: callback
               ? ({ doc, locale, path, req }: {
@@ -203,6 +236,8 @@ describe('locale status badges', () => {
 
   async function renderLocaleList(
     options: {
+      fastMode?: boolean
+      callback?: boolean
       allowed?: string[]
       empty?: boolean
       enabled?: boolean
@@ -215,6 +250,10 @@ describe('locale status badges', () => {
       custom: {
         nestedDocsPageTreePlugin: {
           badges: { colors: {}, labels: {}, locales: options.enabled ?? true },
+          fastMode: options.fastMode,
+          ...(options.callback ? {
+            localeBadgeVisibility: () => true,
+          } : {}),
           breadcrumbsFieldSlug: 'breadcrumbs',
           defaultLimit: 100,
           hideBreadcrumbs: true,
@@ -239,7 +278,7 @@ describe('locale status badges', () => {
       collections: [collectionConfig],
       localization: { ...localization },
     })
-    const find = vi.fn(({ draft, locale }: { draft?: boolean; locale?: string; req?: PayloadRequest }) => {
+    const find = vi.fn(({ draft, locale }: { draft?: boolean; locale?: string; req?: PayloadRequest; select?: unknown }) => {
       if (options.empty) { return Promise.resolve({ docs: [] }) }
       if (locale === 'all') {
         return Promise.resolve({
@@ -280,7 +319,7 @@ describe('locale status badges', () => {
   }
 
   it('loads independent locale statuses in permission-aware batches without changing row content', async () => {
-    const { find, rows } = await renderLocaleList()
+    const { find, rows } = await renderLocaleList({ fastMode: true })
     expect(rows.find(({ id }) => id === 1)).toMatchObject({
       __pageTreeLocaleStatuses: [
         { locale: 'en', status: 'published' },
@@ -304,6 +343,17 @@ describe('locale status badges', () => {
         where: { id: { in: [2, 1] } },
       })
       expect(batch.req).toBeDefined()
+    }
+  })
+
+  it.each([undefined, false, true])('controls locale reads with and without callbacks using fastMode=%s', async (fastMode) => {
+    for (const callback of [false, true]) {
+      const { find } = await renderLocaleList({ callback, fastMode })
+      const batches = find.mock.calls.map(([args]) => args).filter(({ locale }) => locale === 'all')
+      expect(batches).toHaveLength(2)
+      for (const query of batches) {
+        expect(query.select).toEqual(fastMode ? { id: true, _status: true } : undefined)
+      }
     }
   })
 

@@ -421,3 +421,25 @@ display text while retaining its publication status and status color. The label 
 used in the badge's accessible name and, for the active locale, its visible text.
 The resolved label is also exposed as `data-label` for custom styling. Existing
 callbacks returning a status string continue to work.
+
+### List query performance
+
+Use `fastMode` as the single switch for narrower page-tree and status queries:
+
+```ts
+nestedDocsPageTreePlugin({
+  collections: ['pages'],
+  fastMode: true,
+})
+```
+
+With `fastMode: true`, tree queries select active columns plus the title, parent,
+breadcrumbs, slug, status, ordering, and effective sort fields. Status queries select
+`id` and `_status`, plus breadcrumbs when needed for live links.
+
+If custom cells, hooks, `localeBadgeStatus`, or `localeBadgeVisibility` read extra
+fields, include them in the collection's native Payload `forceSelect`. Preview and
+live URL callbacks retain full documents so their links continue to work.
+
+With `fastMode: false` (the default), the plugin reads full documents for tree and
+status queries, even when `admin.enableListViewSelectAPI` is enabled.
