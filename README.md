@@ -23,6 +23,8 @@ Page management tools for Payload admin, built on [`@payloadcms/plugin-nested-do
 
 Browse nested pages while keeping Payload's sorting, filters, pagination, bulk selection, and row actions.
 
+Branches start expanded when there is no saved state. Expanded rows are remembered in your browser's localStorage per collection and user, including after opening a page, refreshing, sorting, paginating, or searching. No extra configuration is needed.
+
 ### Visual hierarchy
 
 ![Hierarchy UI](assets/visual-hierarchy.png)

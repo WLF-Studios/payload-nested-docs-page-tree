@@ -27,6 +27,7 @@ import {
   SelectRow,
   SortHeader,
   toast,
+  useAuth,
   useConfig,
   useLocale,
   usePreferences,
@@ -1148,12 +1149,20 @@ export default function PageTreeListViewClient({
   const router = useRouter()
   const searchParams = useSearchParams()
   const { config } = useConfig()
+  const { user } = useAuth()
   const locale = useLocale()
   const { i18n } = useTranslation()
   const [activeDragRowID, setActiveDragRowID] = React.useState<null | string>(null)
   const [activeDragType, setActiveDragType] = React.useState<null | PageTreeDragType>(null)
   const [activeDropTarget, setActiveDropTarget] = React.useState<null | PageTreeDropTarget>(null)
-  const [collapsedIDs, setCollapsedIDs] = React.useState<Set<string>>(() => new Set())
+  const expandedStorageKey =
+    user?.id == null
+      ? null
+      : `payload-page-tree:expanded:${encodeURIComponent(props.collectionSlug)}:${encodeURIComponent(user.collection)}:${encodeURIComponent(String(user.id))}`
+  const [expansion, setExpansion] = React.useState<{
+    ids: null | Set<string>
+    storageKey: null | string
+  }>(() => ({ ids: null, storageKey: null }))
   const [optimisticOrderRowIDs, setOptimisticOrderRowIDs] = React.useState<null | string[]>(null)
   const [parentMoveEnabled, setParentMoveEnabled] = React.useState(false)
   const [pendingMoveRowID, setPendingMoveRowID] = React.useState<null | string>(null)
@@ -1163,19 +1172,55 @@ export default function PageTreeListViewClient({
     [props.collectionSlug],
   )
 
-  const toggleRow = React.useCallback((rowID: string) => {
-    setCollapsedIDs((currentState) => {
-      const nextState = new Set(currentState)
+  React.useEffect(() => {
+    let ids: null | Set<string> = null
 
-      if (nextState.has(rowID)) {
-        nextState.delete(rowID)
-      } else {
-        nextState.add(rowID)
+    if (expandedStorageKey) {
+      try {
+        const stored: unknown = JSON.parse(window.localStorage.getItem(expandedStorageKey) ?? 'null')
+        if (Array.isArray(stored) && stored.every((id) => typeof id === 'string')) {
+          ids = new Set(stored)
+        }
+      } catch {
+        // Missing, invalid, or unavailable storage leaves the tree expanded.
       }
+    }
 
-      return nextState
-    })
-  }, [])
+    setExpansion({ ids, storageKey: expandedStorageKey })
+  }, [expandedStorageKey])
+
+  React.useEffect(() => {
+    // Do not overwrite a new user's saved state before it has been restored.
+    if (!expandedStorageKey || expansion.storageKey !== expandedStorageKey || !expansion.ids) {
+      return
+    }
+
+    try {
+      window.localStorage.setItem(expandedStorageKey, JSON.stringify([...expansion.ids]))
+    } catch {
+      // Toggling still works when storage is blocked or full.
+    }
+  }, [expandedStorageKey, expansion])
+
+  const toggleRow = React.useCallback(
+    (rowID: string) => {
+      setExpansion((currentState) => {
+        const nextState = new Set(
+          (currentState.storageKey === expandedStorageKey ? currentState.ids : null) ??
+            allDocs.filter((doc) => doc.__pageTreeHasChildren).map((doc) => doc.__pageTreeID),
+        )
+
+        if (nextState.has(rowID)) {
+          nextState.delete(rowID)
+        } else {
+          nextState.add(rowID)
+        }
+
+        return { ids: nextState, storageKey: expandedStorageKey }
+      })
+    },
+    [allDocs, expandedStorageKey],
+  )
   const handleParentMoveToggle = React.useCallback(() => {
     setParentMoveEnabled((currentValue) => {
       const nextValue = !currentValue
@@ -1220,7 +1265,22 @@ export default function PageTreeListViewClient({
       }),
     [currentSort, parentFieldSlug, sourceDocs],
   )
-  const collapseResetKey = React.useMemo(
+  const collapsedIDs = React.useMemo(
+    () =>
+      new Set(
+        liveAllDocs
+          .filter(
+            (doc) =>
+              doc.__pageTreeHasChildren &&
+              expansion.storageKey === expandedStorageKey &&
+              expansion.ids !== null &&
+              !expansion.ids.has(doc.__pageTreeID),
+          )
+          .map((doc) => doc.__pageTreeID),
+      ),
+    [expandedStorageKey, expansion, liveAllDocs],
+  )
+  const dragResetKey = React.useMemo(
     () => JSON.stringify([props.collectionSlug, props.viewType, searchParams.toString()]),
     [props.collectionSlug, props.viewType, searchParams],
   )
@@ -1254,9 +1314,8 @@ export default function PageTreeListViewClient({
     setActiveDragRowID(null)
     setActiveDragType(null)
     setActiveDropTarget(null)
-    setCollapsedIDs(new Set())
     setOptimisticOrderRowIDs(null)
-  }, [collapseResetKey])
+  }, [dragResetKey])
 
   const visibleDocs = React.useMemo(
     () => getVisibleTreeDocs(liveAllDocs, collapsedIDs),
