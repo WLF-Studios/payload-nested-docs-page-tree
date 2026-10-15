@@ -1146,6 +1146,7 @@ export default function PageTreeListViewClient({
   useAsTitle,
   ...props
 }: PageTreeListViewClientProps) {
+  const dndContextID = React.useId()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { config } = useConfig()
@@ -1682,6 +1683,7 @@ export default function PageTreeListViewClient({
     () => (
       <DndContext
         collisionDetection={pageTreeCollisionDetectionStrategy}
+        id={dndContextID}
         onDragCancel={handleDragCancel}
         onDragEnd={handleDragEndSync}
         onDragOver={handleDragOver}
@@ -1714,6 +1716,7 @@ export default function PageTreeListViewClient({
       allDocsByID,
       canReorderRows,
       displayedPaginatedDocs,
+      dndContextID,
       handleDragCancel,
       handleDragEndSync,
       handleDragOver,
