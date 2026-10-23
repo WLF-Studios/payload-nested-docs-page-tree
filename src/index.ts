@@ -13,6 +13,7 @@ import { createMovePageEndpoint } from './endpoints/createMovePageEndpoint.js'
 import { createReorderPageEndpoint } from './endpoints/createReorderPageEndpoint.js'
 import { nestedDocsPageTreePluginCustomKey, pageTreeWriteContextKey } from './types.js'
 import { normalizeNestedDocsPageTreePluginBadgeConfig } from './utilities/badgeConfig.js'
+import { withChildValidationErrors } from './utilities/childValidationErrors.js'
 import {
   createFlowID,
   type Diagnostics,
@@ -393,14 +394,12 @@ export const nestedDocsPageTreePlugin =
         ),
         hooks: {
           ...(collection.hooks ?? {}),
-          ...(diagnosticsAfterChangeHook
-            ? {
-                afterChange: [
-                  ...(collection.hooks?.afterChange ?? []),
-                  diagnosticsAfterChangeHook,
-                ],
-              }
-            : {}),
+          afterChange: collection.hooks?.afterChange?.length || diagnosticsAfterChangeHook ? [
+            ...(collection.hooks?.afterChange ?? []).map((hook) =>
+              withChildValidationErrors(hook, collection.slug, collection.admin!.useAsTitle!),
+            ),
+            ...(diagnosticsAfterChangeHook ? [diagnosticsAfterChangeHook] : []),
+          ] : collection.hooks?.afterChange,
         },
       }
     })

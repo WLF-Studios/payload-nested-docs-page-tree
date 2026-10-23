@@ -10,6 +10,7 @@ Page management tools for Payload admin, built on [`@payloadcms/plugin-nested-do
 - **Customizable badges** with label and color overrides for light and dark themes.
 - **Homepage icon** to identify the root `home` page.
 - **Publishing controls** to stage hierarchy changes or publish eligible moves immediately.
+- **Child validation errors** identify the invalid page, ID, locale, and field messages when a parent save resaves descendants.
 - **Diagnostics mode** to trace moves, reorders, and published-state changes.
 - **Native list tools** including sorting, filters, pagination, bulk selection, and row actions.
 
