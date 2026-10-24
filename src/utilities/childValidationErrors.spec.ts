@@ -1,5 +1,6 @@
-import type { CollectionAfterChangeHook, Config, Payload, PayloadRequest } from 'payload'
+import type { CollectionAfterChangeHook, PayloadRequest } from 'payload'
 
+import { mongooseAdapter } from '@payloadcms/db-mongodb'
 import { nestedDocsPlugin } from '@payloadcms/plugin-nested-docs'
 import { APIError, ValidationError } from 'payload'
 import { describe, expect, it, vi } from 'vitest'
@@ -9,9 +10,15 @@ import { withChildValidationErrors } from './childValidationErrors.js'
 
 const genericMessage = 'Could not publish or save changes: One or more children are invalid.'
 
-function setup() {
+const configBase = {
+  db: mongooseAdapter({ url: 'mongodb://127.0.0.1/page-tree-plugin-tests' }),
+  secret: 'page-tree-plugin-test-secret',
+}
+
+async function setup() {
   const config = nestedDocsPageTreePlugin({ collections: ['pages'] })(
-    nestedDocsPlugin({ collections: ['pages'] })({
+    await nestedDocsPlugin({ collections: ['pages'] })({
+      ...configBase,
       collections: [
         {
           slug: 'pages',
@@ -20,7 +27,7 @@ function setup() {
           versions: { drafts: true },
         },
       ],
-    } as Config),
+    }),
   )
   const collection = config.collections![0]
   const parent = { id: 39, name: 'Plan Your Visit', _status: 'published' }
@@ -63,7 +70,7 @@ function setup() {
 
 describe('nested child validation errors', () => {
   it('shows the child title, ID, locale and each invalid field through the real nested-docs hook', async () => {
-    const { req, run, update } = setup()
+    const { req, run, update } = await setup()
     const error = (await run().catch((error: unknown) => error)) as APIError
     expect(error).toBeInstanceOf(APIError)
     expect(error.status).toBe(400)
@@ -79,12 +86,19 @@ describe('nested child validation errors', () => {
   })
 
   it('preserves the deepest invalid descendant through multiple resave levels', async () => {
-    const { child, req, run, update, validation } = setup()
+    const { child, req, run, update, validation } = await setup()
     const grandchild = { id: 95, name: 'Drone Policy', _status: 'published', parent: 94 }
     vi.mocked(req.payload.find).mockImplementation((args) =>
       Promise.resolve({
         docs: [(args.where?.parent as { equals: number }).equals === 39 ? child : grandchild],
-      } as Awaited<ReturnType<Payload['find']>>),
+        hasNextPage: false,
+        hasPrevPage: false,
+        limit: 1,
+        page: 1,
+        pagingCounter: 1,
+        totalDocs: 1,
+        totalPages: 1,
+      }),
     )
     update.mockImplementation(async (args: { id: number; req: PayloadRequest }) => {
       if (args.id === 95) {
@@ -101,7 +115,7 @@ describe('nested child validation errors', () => {
   })
 
   it('keeps descendant field paths out of the parent form when a custom hook updates another page', async () => {
-    const { parent, req, run, update, validation } = setup()
+    const { parent, req, run, update, validation } = await setup()
     update.mockImplementation(async (options: { id: number; req: PayloadRequest }) => {
       if (options.id === 94) {
         throw validation
@@ -124,7 +138,7 @@ describe('nested child validation errors', () => {
   })
 
   it('does not alter successful saves or the original request', async () => {
-    const { child, req, run, update } = setup()
+    const { child, req, run, update } = await setup()
     update.mockImplementation((args: { id: number; req: PayloadRequest }) => {
       args.req.transactionID = 'shared-transaction'
       return Promise.resolve(child)
@@ -135,11 +149,12 @@ describe('nested child validation errors', () => {
   })
 
   it('keeps the generic error when no child validation detail was captured', async () => {
-    const { hook } = setup()
+    const { hook } = await setup()
     // A direct upstream error has no recoverable field detail.
     expect(hook).toBeTypeOf('function')
     const original = new APIError(genericMessage, 400)
     const config = nestedDocsPageTreePlugin({ collections: ['pages'] })({
+      ...configBase,
       collections: [
         {
           slug: 'pages',
@@ -158,7 +173,7 @@ describe('nested child validation errors', () => {
           },
         },
       ],
-    } as Config)
+    })
     await expect(
       config.collections![0].hooks!.afterChange![0]({
         doc: { id: 1 },
