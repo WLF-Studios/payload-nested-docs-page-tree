@@ -625,7 +625,6 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
   return (
     <PageTreeListViewClient
       {...clientProps}
-      allDocs={orderedDocs}
       badgeConfig={pageTreeConfig.badges}
       badgesLinks={badgesLinks}
       canMoveDocs={canMoveDocs}
@@ -634,6 +633,7 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
       orderableFieldName={orderableFieldName}
       parentFieldSlug={pageTreeConfig.parentFieldSlug}
       query={effectiveQuery}
+      renderedRowIDs={orderedDocs.map((doc) => doc.__pageTreeID)}
       sourceDocs={treeSourceDocs}
       useAsTitle={props.collectionConfig.admin.useAsTitle}
     />

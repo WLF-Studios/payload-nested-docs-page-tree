@@ -69,7 +69,6 @@ import { PageTreeStatusBadge } from './PageTreeStatusBadge.js'
 import { PageTreeTitleCell } from './PageTreeTitleCell.js'
 
 type PageTreeListViewClientProps = {
-  allDocs: PageTreeDoc[]
   badgeConfig: NestedDocsPageTreePluginResolvedBadgeConfig
   badgesLinks?: NestedDocsPageTreePluginBadgesLinks
   canMoveDocs: boolean
@@ -78,6 +77,8 @@ type PageTreeListViewClientProps = {
   orderableFieldName?: string
   parentFieldSlug: string
   query: ListQuery
+  /** Server tree order, which indexes each column's renderedCells. */
+  renderedRowIDs: string[]
   sourceDocs: PageTreeSourceDoc[]
   useAsTitle: string
 } & Omit<ListViewClientProps, 'columnState' | 'Table'>
@@ -1133,7 +1134,6 @@ function HierarchyTable({
 }
 
 export default function PageTreeListViewClient({
-  allDocs,
   badgeConfig,
   badgesLinks,
   canMoveDocs,
@@ -1142,6 +1142,7 @@ export default function PageTreeListViewClient({
   orderableFieldName,
   parentFieldSlug,
   query,
+  renderedRowIDs,
   sourceDocs,
   useAsTitle,
   ...props
@@ -1203,25 +1204,6 @@ export default function PageTreeListViewClient({
     }
   }, [expandedStorageKey, expansion])
 
-  const toggleRow = React.useCallback(
-    (rowID: string) => {
-      setExpansion((currentState) => {
-        const nextState = new Set(
-          (currentState.storageKey === expandedStorageKey ? currentState.ids : null) ??
-            allDocs.filter((doc) => doc.__pageTreeHasChildren).map((doc) => doc.__pageTreeID),
-        )
-
-        if (nextState.has(rowID)) {
-          nextState.delete(rowID)
-        } else {
-          nextState.add(rowID)
-        }
-
-        return { ids: nextState, storageKey: expandedStorageKey }
-      })
-    },
-    [allDocs, expandedStorageKey],
-  )
   const handleParentMoveToggle = React.useCallback(() => {
     setParentMoveEnabled((currentValue) => {
       const nextValue = !currentValue
@@ -1265,6 +1247,25 @@ export default function PageTreeListViewClient({
         sort: currentSort,
       }),
     [currentSort, parentFieldSlug, sourceDocs],
+  )
+  const toggleRow = React.useCallback(
+    (rowID: string) => {
+      setExpansion((currentState) => {
+        const nextState = new Set(
+          (currentState.storageKey === expandedStorageKey ? currentState.ids : null) ??
+            liveAllDocs.filter((doc) => doc.__pageTreeHasChildren).map((doc) => doc.__pageTreeID),
+        )
+
+        if (nextState.has(rowID)) {
+          nextState.delete(rowID)
+        } else {
+          nextState.add(rowID)
+        }
+
+        return { ids: nextState, storageKey: expandedStorageKey }
+      })
+    },
+    [expandedStorageKey, liveAllDocs],
   )
   const collapsedIDs = React.useMemo(
     () =>
@@ -1356,8 +1357,8 @@ export default function PageTreeListViewClient({
     [displayedPaginatedDocs],
   )
   const renderedCellIndexByDocID = React.useMemo(
-    () => new Map(allDocs.map((doc, index) => [doc.__pageTreeID, index])),
-    [allDocs],
+    () => new Map(renderedRowIDs.map((id, index) => [id, index])),
+    [renderedRowIDs],
   )
   const normalizedColumnState = React.useMemo(
     () => ensureUseAsTitleColumn(columnState, useAsTitle),

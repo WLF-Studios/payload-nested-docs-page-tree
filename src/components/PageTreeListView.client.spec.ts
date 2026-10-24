@@ -3,7 +3,6 @@ import React from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
-import { buildPageTreeDocs } from '../utilities/pageTree.js'
 import PageTreeListViewClient from './PageTreeListView.client.js'
 
 vi.mock('@payloadcms/ui', () => ({
@@ -27,7 +26,6 @@ vi.mock('@payloadcms/ui/icons/Eye', () => ({ EyeIcon: () => null }))
 
 const sourceDocs = [{ id: 'home', parent: null, title: 'Home' }]
 const props: React.ComponentProps<typeof PageTreeListViewClient> = {
-  allDocs: buildPageTreeDocs(sourceDocs, { parentFieldSlug: 'parent' }),
   badgeConfig: { colors: {}, labels: {} },
   canMoveDocs: true,
   collectionSlug: 'pages',
@@ -45,6 +43,7 @@ const props: React.ComponentProps<typeof PageTreeListViewClient> = {
   orderableFieldName: '_order',
   parentFieldSlug: 'parent',
   query: { sort: '_order' },
+  renderedRowIDs: ['home'],
   sourceDocs,
   useAsTitle: 'title',
   viewType: 'list',

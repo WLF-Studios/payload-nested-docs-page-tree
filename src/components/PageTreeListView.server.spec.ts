@@ -217,8 +217,8 @@ describe('NestedDocsPageTreeListView', () => {
       },
       _displayStatus: 'changed',
     })
-    expect(result.props.allDocs[0].__pageTreeStatusLinks).toEqual(
-      result.props.sourceDocs[0].__pageTreeStatusLinks,
+    expect([...result.props.renderedRowIDs].sort()).toEqual(
+      result.props.sourceDocs.map((doc: { id: number | string }) => String(doc.id)).sort(),
     )
     expect(find).toHaveBeenCalledTimes(2)
     expect(payloadMocks.extractJWT).toHaveBeenCalledTimes(1)
