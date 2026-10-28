@@ -224,6 +224,49 @@ describe('NestedDocsPageTreeListView', () => {
     expect(payloadMocks.extractJWT).toHaveBeenCalledTimes(1)
     expect(result.props.badgesLinks).toEqual(callback ? {} : { liveURL: 'https://example.com' })
   })
+
+  it('passes the rendered columns to the client query in URL form', async () => {
+    const collectionConfig = {
+      slug: 'pages',
+      admin: { useAsTitle: 'title' },
+      custom: {
+        nestedDocsPageTreePlugin: {
+          badges: { colors: {}, labels: {} },
+          breadcrumbsFieldSlug: 'breadcrumbs',
+          defaultLimit: 100,
+          hideBreadcrumbs: true,
+          homeIndicator: { enabled: false },
+          parentFieldSlug: 'parent',
+        },
+      },
+    }
+    configMocks.getClientConfig.mockReturnValue({ collections: [collectionConfig] })
+
+    // ListQueryProvider syncs `query` back to the URL, so preference objects
+    // here would overwrite a column change the user has just made.
+    const result = await NestedDocsPageTreeListView({
+      collectionConfig,
+      collectionSlug: 'pages',
+      columnState: [
+        { accessor: 'title', active: false },
+        { accessor: 'slug', active: true },
+        { accessor: 'id', active: false },
+      ],
+      data: { page: 1 },
+      i18n: { t: (key: string) => key },
+      listPreferences: {
+        columns: [
+          { accessor: 'title', active: true },
+          { accessor: 'slug', active: false },
+        ],
+      },
+      payload: { config: {}, find: vi.fn(() => Promise.resolve({ docs: [] })) },
+      user: null,
+    })
+
+    // The title column is always shown; the rest follow the rendered state.
+    expect(result.props.query.columns).toEqual(['title', 'slug', '-id'])
+  })
 })
 
 describe('locale status badges', () => {
