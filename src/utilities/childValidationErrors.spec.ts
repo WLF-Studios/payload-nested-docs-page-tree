@@ -148,6 +148,37 @@ describe('nested child validation errors', () => {
     expect(req.payload.update).toBe(update)
   })
 
+  it('lets hooks read native Request members on REST and admin requests', async () => {
+    // Payload builds REST and admin requests by assigning onto a real Request.
+    const req = Object.assign(
+      new Request('http://localhost/api/pages/39', {
+        body: 'saved',
+        headers: { 'x-page-tree': 'yes' },
+        method: 'PATCH',
+      }),
+      { context: {}, payload: { update: vi.fn() } },
+    ) as unknown as PayloadRequest
+    const hook = withChildValidationErrors(
+      async ({ doc, req: wrappedReq }) => ({
+        ...doc,
+        body: await wrappedReq.text!(),
+        header: wrappedReq.headers.get('x-page-tree'),
+        url: wrappedReq.url,
+      }),
+      'pages',
+      'name',
+    )
+
+    await expect(
+      hook({ doc: { id: 39 }, req } as Parameters<CollectionAfterChangeHook>[0]),
+    ).resolves.toEqual({
+      id: 39,
+      body: 'saved',
+      header: 'yes',
+      url: 'http://localhost/api/pages/39',
+    })
+  })
+
   it('keeps the generic error when no child validation detail was captured', async () => {
     const { hook } = await setup()
     // A direct upstream error has no recoverable field detail.

@@ -57,9 +57,15 @@ export function withChildValidationErrors(
         return property === 'update' ? update : Reflect.get(target, property, receiver)
       },
     })
+    // REST and admin requests are real Request objects, whose getters and
+    // methods throw "Illegal invocation" unless called on the Request itself.
     const req = new Proxy(args.req, {
-      get(target, property, receiver) {
-        return property === 'payload' ? payload : Reflect.get(target, property, receiver)
+      get(target, property) {
+        if (property === 'payload') {
+          return payload
+        }
+        const value: unknown = Reflect.get(target, property)
+        return typeof value === 'function' ? value.bind(target) : value
       },
     })
     scopedRequests.add(req)
