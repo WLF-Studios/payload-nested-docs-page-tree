@@ -1751,6 +1751,18 @@ export default function PageTreeListViewClient({
     props.collectionSlug,
   ])
 
+  // ListQueryProvider writes this prop back to the URL whenever its identity
+  // changes, so a new object on every render would undo column and filter edits.
+  const listQuery = React.useMemo(
+    () => ({
+      ...query,
+      limit: currentLimit,
+      page: displayedPaginatedData.page,
+      sort: currentSort,
+    }),
+    [currentLimit, currentSort, displayedPaginatedData.page, query],
+  )
+
   return (
     <div className={styles.root}>
       <PageTreeProvider value={hierarchyValue}>
@@ -1759,12 +1771,7 @@ export default function PageTreeListViewClient({
           data={displayedPaginatedData}
           modifySearchParams
           orderableFieldName={orderableFieldName}
-          query={{
-            ...query,
-            limit: currentLimit,
-            page: displayedPaginatedData.page,
-            sort: currentSort,
-          }}
+          query={listQuery}
         >
           <DefaultListView
             {...props}

@@ -14,6 +14,7 @@ import {
   applyLocaleFiltering,
   combineWhereConstraints,
   mergeListSearchAndWhere,
+  transformColumnsToSearchParams,
 } from 'payload/shared'
 import React from 'react'
 
@@ -632,7 +633,12 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
       homeIndicatorEnabled={pageTreeConfig.homeIndicator.enabled}
       orderableFieldName={orderableFieldName}
       parentFieldSlug={pageTreeConfig.parentFieldSlug}
-      query={effectiveQuery}
+      query={{
+        ...effectiveQuery,
+        // ListQueryProvider syncs this back to the URL, so it must describe the
+        // rendered columns in URL form, not the raw preference objects.
+        columns: transformColumnsToSearchParams(columnPreferences),
+      }}
       renderedRowIDs={orderedDocs.map((doc) => doc.__pageTreeID)}
       sourceDocs={treeSourceDocs}
       useAsTitle={props.collectionConfig.admin.useAsTitle}
