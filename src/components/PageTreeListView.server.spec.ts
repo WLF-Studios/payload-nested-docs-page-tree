@@ -225,7 +225,28 @@ describe('NestedDocsPageTreeListView', () => {
     expect(result.props.badgesLinks).toEqual(callback ? {} : { liveURL: 'https://example.com' })
   })
 
-  it('passes the rendered columns to the client query in URL form', async () => {
+  it.each([
+    {
+      name: 'saved preferences',
+      columns: ['title', 'slug', '-id'],
+      listPreferences: {
+        columns: [
+          { accessor: 'title', active: true },
+          { accessor: 'slug', active: false },
+        ],
+      },
+    },
+    {
+      name: 'URL columns',
+      columns: ['title', 'slug', '-id'],
+      searchParams: { columns: '["slug"]' },
+    },
+    { name: 'no saved or URL columns', columns: undefined },
+  ])('passes the rendered columns to the client query in URL form from $name', async ({
+    columns,
+    listPreferences,
+    searchParams,
+  }) => {
     const collectionConfig = {
       slug: 'pages',
       admin: { useAsTitle: 'title' },
@@ -254,18 +275,15 @@ describe('NestedDocsPageTreeListView', () => {
       ],
       data: { page: 1 },
       i18n: { t: (key: string) => key },
-      listPreferences: {
-        columns: [
-          { accessor: 'title', active: true },
-          { accessor: 'slug', active: false },
-        ],
-      },
+      listPreferences,
       payload: { config: {}, find: vi.fn(() => Promise.resolve({ docs: [] })) },
+      searchParams,
       user: null,
     })
 
     // The title column is always shown; the rest follow the rendered state.
-    expect(result.props.query.columns).toEqual(['title', 'slug', '-id'])
+    // Without a column source, the URL and preferences keep following defaults.
+    expect(result.props.query.columns).toEqual(columns)
   })
 })
 

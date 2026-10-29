@@ -636,8 +636,10 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
       query={{
         ...effectiveQuery,
         // ListQueryProvider syncs this back to the URL, so it must describe the
-        // rendered columns in URL form, not the raw preference objects.
-        columns: transformColumnsToSearchParams(columnPreferences),
+        // rendered columns in URL form, not the raw preference objects. Without
+        // saved or URL columns it stays empty, like Payload's list view, so the
+        // next query change doesn't pin the default columns into preferences.
+        columns: query.columns ? transformColumnsToSearchParams(columnPreferences) : undefined,
       }}
       renderedRowIDs={orderedDocs.map((doc) => doc.__pageTreeID)}
       sourceDocs={treeSourceDocs}
