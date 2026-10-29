@@ -224,6 +224,67 @@ describe('NestedDocsPageTreeListView', () => {
     expect(payloadMocks.extractJWT).toHaveBeenCalledTimes(1)
     expect(result.props.badgesLinks).toEqual(callback ? {} : { liveURL: 'https://example.com' })
   })
+
+  it.each([
+    {
+      name: 'saved preferences',
+      columns: ['title', 'slug', '-id'],
+      listPreferences: {
+        columns: [
+          { accessor: 'title', active: true },
+          { accessor: 'slug', active: false },
+        ],
+      },
+    },
+    {
+      name: 'URL columns',
+      columns: ['title', 'slug', '-id'],
+      searchParams: { columns: '["slug"]' },
+    },
+    { name: 'no saved or URL columns', columns: undefined },
+  ])('passes the rendered columns to the client query in URL form from $name', async ({
+    columns,
+    listPreferences,
+    searchParams,
+  }) => {
+    const collectionConfig = {
+      slug: 'pages',
+      admin: { useAsTitle: 'title' },
+      custom: {
+        nestedDocsPageTreePlugin: {
+          badges: { colors: {}, labels: {} },
+          breadcrumbsFieldSlug: 'breadcrumbs',
+          defaultLimit: 100,
+          hideBreadcrumbs: true,
+          homeIndicator: { enabled: false },
+          parentFieldSlug: 'parent',
+        },
+      },
+    }
+    configMocks.getClientConfig.mockReturnValue({ collections: [collectionConfig] })
+
+    // ListQueryProvider syncs `query` back to the URL, so preference objects
+    // here would overwrite a column change the user has just made.
+    const result = await NestedDocsPageTreeListView({
+      collectionConfig,
+      collectionSlug: 'pages',
+      columnState: [
+        { accessor: 'title', active: false },
+        { accessor: 'slug', active: true },
+        { accessor: 'id', active: false },
+      ],
+      data: { page: 1 },
+      i18n: { t: (key: string) => key },
+      listPreferences,
+      payload: { config: {}, find: vi.fn(() => Promise.resolve({ docs: [] })) },
+      searchParams,
+      user: null,
+    })
+
+    // The title column is always shown; the rest follow the rendered state.
+    // Without a column source, the URL and preferences keep following defaults.
+    expect(result.props.query.columns).toEqual(columns)
+  })
 })
 
 describe('locale status badges', () => {
