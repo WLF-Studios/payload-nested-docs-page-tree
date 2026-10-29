@@ -179,6 +179,39 @@ describe('nested child validation errors', () => {
     })
   })
 
+  it('runs request getters and methods against the original request', async () => {
+    // Node's Request tolerates a proxy receiver, but stricter runtimes check the
+    // brand the same way a private field does, so this fails without the fix.
+    class BrandedRequest {
+      #headers = new Headers({ 'x-page-tree': 'yes' })
+      text() {
+        return Promise.resolve(this.#headers.get('x-page-tree'))
+      }
+      get headers() {
+        return this.#headers
+      }
+    }
+    const update = vi.fn()
+    const req = Object.assign(new BrandedRequest(), {
+      context: {},
+      payload: { update },
+    }) as unknown as PayloadRequest
+    const hook = withChildValidationErrors(
+      async ({ doc, req: wrappedReq }) => ({
+        ...doc,
+        body: await wrappedReq.text!(),
+        header: wrappedReq.headers.get('x-page-tree'),
+        scoped: wrappedReq.payload.update !== update,
+      }),
+      'pages',
+      'name',
+    )
+
+    await expect(
+      hook({ doc: { id: 39 }, req } as Parameters<CollectionAfterChangeHook>[0]),
+    ).resolves.toEqual({ id: 39, body: 'yes', header: 'yes', scoped: true })
+  })
+
   it('keeps the generic error when no child validation detail was captured', async () => {
     const { hook } = await setup()
     // A direct upstream error has no recoverable field detail.
