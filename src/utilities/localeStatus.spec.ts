@@ -135,6 +135,19 @@ describe('locale badge visibility', () => {
     ])
   })
 
+  it('passes a marker through without replacing the publication status', async () => {
+    const { args } = setup()
+    const marker = { id: 'flag', label: 'Flagged' }
+    const result = await withPageTreeLocaleStatuses({
+      ...args,
+      localeBadgeStatus: ({ locale, status }) => (locale === 'en' ? { marker, status } : status),
+    })
+    expect(result[0].__pageTreeLocaleStatuses).toEqual([
+      { locale: 'en', marker, status: 'changed' },
+      { locale: 'fr', status: 'draft' },
+    ])
+  })
+
   it('preserves default visibility and narrow queries without a callback', async () => {
     const { args, find } = setup()
     const result = await withPageTreeLocaleStatuses({ ...args, fastMode: true })

@@ -91,6 +91,9 @@ export async function withPageTreeLocaleStatuses({
         ...(typeof displayStatus === 'object' && displayStatus.label
           ? { label: displayStatus.label }
           : {}),
+        ...(typeof displayStatus === 'object' && displayStatus.marker
+          ? { marker: displayStatus.marker }
+          : {}),
       }
     }),
   }))

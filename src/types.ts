@@ -56,7 +56,7 @@ export type PageTreeLocaleBadgeStatus = (args: {
   publishedDoc?: Record<string, unknown>
   req: PayloadRequest
   status: PageTreeLocaleStatus['status']
-}) => PageTreeLocaleStatus['status'] | Pick<PageTreeLocaleStatus, 'status' | 'label'>
+}) => PageTreeLocaleStatus['status'] | Pick<PageTreeLocaleStatus, 'label' | 'marker' | 'status'>
 
 export type NestedDocsPageTreePluginConfig = {
   badges?: NestedDocsPageTreePluginBadgeConfig
@@ -139,6 +139,8 @@ export type PageTreeLocaleStatus = {
   /** Optional display label; publication status remains separate. */
   label?: string
   locale: string
+  /** Optional marker; `id` is exposed as `data-marker` for styling, `label` is for people. */
+  marker?: { id: string; label: string }
   status: 'changed' | 'draft' | 'published' | 'unknown'
   visible?: boolean
 }

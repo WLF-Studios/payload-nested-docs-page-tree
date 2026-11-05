@@ -25,7 +25,7 @@ export function PageTreeLocaleStatusBadges({
 
   return (
     <span className="pages-hierarchy-locale-statuses">
-      {statuses.map(({ label: customLabel, locale: code, status, visible }) => {
+      {statuses.map(({ label: customLabel, locale: code, marker, status, visible }) => {
         const active = code === locale?.code
         const label =
           customLabel?.trim() ||
@@ -49,12 +49,13 @@ export function PageTreeLocaleStatusBadges({
           >
             <Badge
               aria-hidden={visible === false ? true : undefined}
-              aria-label={`${code.toUpperCase()}: ${label}`}
+              aria-label={`${code.toUpperCase()}: ${label}${marker ? `, ${marker.label}` : ''}`}
               className={`pages-hierarchy-status-badge pages-hierarchy-status-badge--${status} pages-hierarchy-locale-status-badge`}
               data-active={active ? 'true' : 'false'}
               data-custom-color={color ? 'true' : undefined}
               data-label={label}
               data-locale={code}
+              data-marker={marker?.id}
               data-status={status}
               href={href}
               onClick={href ? (event: React.MouseEvent) => event.stopPropagation() : undefined}
@@ -66,6 +67,7 @@ export function PageTreeLocaleStatusBadges({
                 ...(color ? ({ '--page-tree-badge-base': color } as React.CSSProperties) : {}),
                 ...(visible === false ? { visibility: 'hidden' } : {}),
               }}
+              title={marker?.label}
             >
               <span className="pages-hierarchy-locale-status-badge__code">
                 {code.toUpperCase()}

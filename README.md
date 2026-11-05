@@ -425,6 +425,11 @@ used in the badge's accessible name and, for the active locale, its visible text
 The resolved label is also exposed as `data-label` for custom styling. Existing
 callbacks returning a status string continue to work.
 
+Return `{ status, marker: { id, label } }` (with or without `label`) to flag a
+locale without changing its text or color. The plugin draws nothing for it: `id` is
+exposed as `data-marker` for custom styling, and `label` becomes the badge's `title`
+and is appended to its accessible name.
+
 ### List query performance
 
 Use `fastMode` as the single switch for narrower page-tree and status queries:

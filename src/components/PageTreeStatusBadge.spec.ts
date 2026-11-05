@@ -320,3 +320,23 @@ it('uses the locale label override for visible text and the accessible editor li
   expect(html).toContain('aria-label="EN: version:draft"')
   expect(html).not.toContain('title=')
 })
+
+it('exposes a locale marker for styling, as a tooltip and in the accessible name', () => {
+  const html = renderToStaticMarkup(
+    React.createElement(PageTreeStatusBadge, {
+      badgeConfig: { colors: {}, labels: {}, locales: true },
+      collectionSlug: 'pages',
+      doc: {
+        id: 1,
+        __pageTreeLocaleStatuses: [
+          { locale: 'fr', marker: { id: 'flag', label: 'Flagged' }, status: 'published' },
+          { locale: 'en', status: 'draft' },
+        ],
+      },
+    }),
+  )
+  expect(html).toContain('data-marker="flag"')
+  expect(html).toContain('title="Flagged"')
+  expect(html).toContain('aria-label="FR: version:published, Flagged"')
+  expect(html.match(/data-marker=/g)).toHaveLength(1)
+})
