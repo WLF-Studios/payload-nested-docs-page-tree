@@ -440,6 +440,21 @@ With `fastMode: true`, tree queries select active columns plus the title, parent
 breadcrumbs, slug, status, ordering, and effective sort fields. Status queries select
 `id` and `_status`, plus breadcrumbs when needed for live links.
 
+For ordinary lists, fast mode reuses Payload's current rows.
+When all matching rows are loaded, it reads only missing hierarchy and sort fields
+with the current user's permissions. For paginated lists, it still loads the full
+hierarchy so collapsing branches can fill the visible page, but renders only rows
+whose native cells are unavailable. Cells are matched by document ID. Lists using
+ordinary text, date, number, email, textarea, checkbox, or code columns send data
+instead of server-rendered cells and use Payload's `RenderDefaultCell` for visible
+rows only. Locale status and missing-metadata reads run concurrently when the
+native list already provides all matching IDs.
+
+Custom cells, rich text cells, custom document URLs, and hidden title columns use
+the tree renderer so they receive enriched row data. Base filters, grouped/trash
+views, and badge link configuration retain the full query/rendering path. This
+does not bypass Payload's own list loading or version-status enrichment.
+
 If custom cells, hooks, `localeBadgeStatus`, or `localeBadgeVisibility` read extra
 fields, include them in the collection's native Payload `forceSelect`. Preview and
 live URL callbacks retain full documents so their links continue to work.

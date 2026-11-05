@@ -23,6 +23,7 @@ import {
   DefaultListView,
   ListQueryProvider,
   Pill,
+  RenderDefaultCell,
   SelectAll,
   SelectRow,
   SortHeader,
@@ -77,6 +78,7 @@ type PageTreeListViewClientProps = {
   orderableFieldName?: string
   parentFieldSlug: string
   query: ListQuery
+  renderDefaultCells?: boolean
   /** Server tree order, which indexes each column's renderedCells. */
   renderedRowIDs: string[]
   sourceDocs: PageTreeSourceDoc[]
@@ -371,6 +373,33 @@ function sliceColumnState(
 
       return column.renderedCells?.[renderedCellIndex] ?? null
     }),
+  }))
+}
+
+function renderVisibleDefaultCells(
+  columns: Column[],
+  docs: PageTreeDoc[],
+  collectionSlug: string,
+  viewType: ListViewClientProps['viewType'],
+): Column[] {
+  const linkedColumnIndex = columns.findIndex(column => column.active)
+  return columns.map((column, columnIndex) => ({
+    ...column,
+    renderedCells: !column.active || column.accessor === '_status' ? [] : docs.map(doc => (
+      <RenderDefaultCell
+        clientProps={{
+          cellData: column.accessor.split('.').reduce<any>((value, key) => value?.[key], doc),
+          collectionSlug,
+          field: column.field,
+          link: columnIndex === linkedColumnIndex,
+          rowData: doc,
+          viewType,
+        }}
+        columnIndex={columnIndex}
+        isLinkedColumn={columnIndex === linkedColumnIndex}
+        key={doc.__pageTreeID}
+      />
+    )),
   }))
 }
 
@@ -1142,6 +1171,7 @@ export default function PageTreeListViewClient({
   orderableFieldName,
   parentFieldSlug,
   query,
+  renderDefaultCells = false,
   renderedRowIDs,
   sourceDocs,
   useAsTitle,
@@ -1365,8 +1395,10 @@ export default function PageTreeListViewClient({
     [columnState, useAsTitle],
   )
   const paginatedColumnState = React.useMemo(
-    () => sliceColumnState(normalizedColumnState, displayedPaginatedDocs, renderedCellIndexByDocID),
-    [displayedPaginatedDocs, normalizedColumnState, renderedCellIndexByDocID],
+    () => renderDefaultCells
+      ? renderVisibleDefaultCells(normalizedColumnState, displayedPaginatedDocs, props.collectionSlug, props.viewType)
+      : sliceColumnState(normalizedColumnState, displayedPaginatedDocs, renderedCellIndexByDocID),
+    [displayedPaginatedDocs, normalizedColumnState, props.collectionSlug, props.viewType, renderDefaultCells, renderedCellIndexByDocID],
   )
   const tableColumns = React.useMemo(
     () =>

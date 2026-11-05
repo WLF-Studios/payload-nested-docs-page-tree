@@ -37,6 +37,143 @@ vi.mock('./PageTreeListView.client.js', () => ({
 }))
 
 describe('NestedDocsPageTreeListView', () => {
+  function nativeListFixture() {
+    const docs = [
+      { id: 2, slug: 'child', _order: 'a', _status: 'draft', breadcrumbs: [], createdAt: '2026-01-02', parent: 1, title: 'Child' },
+      { id: 1, slug: 'parent', _order: 'b', _status: 'published', breadcrumbs: [], createdAt: '2026-01-01', parent: null, title: 'Parent' },
+    ]
+    const collectionConfig = {
+      slug: 'pages', admin: { useAsTitle: 'title' }, custom: { nestedDocsPageTreePlugin: {
+        badges: { colors: {}, labels: {} }, breadcrumbsFieldSlug: 'breadcrumbs',
+        defaultLimit: 200, fastMode: true, hideBreadcrumbs: true,
+        homeIndicator: { enabled: false }, parentFieldSlug: 'parent',
+      } },
+      defaultSort: '_order',
+      orderable: true,
+    }
+    const columnState = ['title', 'createdAt', '_status'].map(accessor => ({
+      accessor, active: true, field: { name: accessor, type: 'text' },
+      Heading: accessor, renderedCells: docs.map(doc => `${accessor}:${doc.id}`),
+    }))
+    configMocks.getClientConfig.mockReturnValue({ collections: [collectionConfig] })
+    uiMocks.getColumns.mockClear()
+    uiMocks.renderTable.mockClear()
+    const find = vi.fn((_args: any) => Promise.resolve({ docs }))
+    const props = {
+      collectionConfig, collectionSlug: 'pages', columnState,
+      data: { docs, hasNextPage: false, hasPrevPage: false, page: 1, totalDocs: 2, totalPages: 1 },
+      i18n: { t: (key: string) => key }, payload: { config: {}, find },
+      viewType: 'list',
+    }
+    return { docs, find, props }
+  }
+
+  it('reuses a complete native list and its cells by ID without reading or rendering it again', async () => {
+    const { find, props } = nativeListFixture()
+    props.columnState[0].field.type = 'json'
+    const result = await NestedDocsPageTreeListView(props)
+    expect(find).not.toHaveBeenCalled()
+    expect(uiMocks.renderTable).not.toHaveBeenCalled()
+    expect(result.props.sourceDocs.map((doc: PageTreeSourceDoc) => doc.id)).toEqual([2, 1])
+    expect(result.props.renderedRowIDs).toEqual(['2', '1'])
+    expect(result.props.columnState.find((col: any) => col.accessor === 'title').renderedCells)
+      .toBe(props.columnState[0].renderedCells)
+    expect(result.props.columnState.find((col: any) => col.accessor === '_status').renderedCells)
+      .toEqual([])
+  })
+
+  it('sends data instead of rendered cells for ordinary columns, including partial lists', async () => {
+    const { docs, props } = nativeListFixture()
+    Object.assign(props.data, { docs: [docs[0]], hasNextPage: true, totalPages: 2 })
+    props.columnState.forEach(col => { col.renderedCells = col.renderedCells.slice(0, 1) })
+    const result = await NestedDocsPageTreeListView(props)
+    expect(result.props.renderDefaultCells).toBe(true)
+    expect(result.props.columnState.every((col: any) => col.renderedCells.length === 0)).toBe(true)
+    expect(uiMocks.renderTable).not.toHaveBeenCalled()
+  })
+
+  it('fetches only missing tree metadata and preserves nested selected values', async () => {
+    const { find, props } = nativeListFixture()
+    props.columnState.push({ accessor: 'meta.title', active: true, field: { name: 'meta.title', type: 'text' }, Heading: 'Meta', renderedCells: ['Child SEO', 'Parent SEO'] })
+    const nativeDocs = props.data.docs.map(({ _order: _order, parent: _parent, ...doc }) => ({ ...doc, meta: { title: `${doc.title} SEO` } }))
+    Object.assign(props.data, { docs: nativeDocs })
+    Object.assign(props, { searchParams: { sort: 'meta.rank' } })
+    find.mockResolvedValue({ docs: [
+      { id: 1, _order: 'b', meta: { rank: 1 }, parent: null },
+      { id: 2, _order: 'a', meta: { rank: 2 }, parent: 1 },
+    ] } as any)
+    const result = await NestedDocsPageTreeListView(props)
+    expect(find).toHaveBeenCalledTimes(1)
+    expect(find.mock.calls[0][0]).toMatchObject({
+      depth: 0, draft: undefined, overrideAccess: false, pagination: false,
+      select: { _order: true, meta: { rank: true }, parent: true },
+      where: { id: { in: [2, 1] } },
+    })
+    expect(find.mock.calls[0][0].includeLockStatus).not.toBe(true)
+    expect(result.props.sourceDocs[0]).toMatchObject({ id: 2, meta: { rank: 2, title: 'Child SEO' }, parent: 1 })
+    expect(nativeDocs[0].meta).toEqual({ title: 'Child SEO' })
+  })
+
+  it('removes cells for documents excluded by the supplementary read', async () => {
+    const { docs, find, props } = nativeListFixture()
+    props.columnState[0].field.type = 'json'
+    Object.assign(props.data, { docs: docs.map(({ parent: _parent, ...doc }) => doc) })
+    find.mockResolvedValue({ docs: [docs[1]] })
+    const result = await NestedDocsPageTreeListView(props)
+    expect(result.props.sourceDocs.map((doc: PageTreeSourceDoc) => doc.id)).toEqual([1])
+    expect(result.props.renderedRowIDs).toEqual(['1'])
+    expect(result.props.columnState[0].renderedCells).toEqual(['title:1'])
+    expect(uiMocks.renderTable).not.toHaveBeenCalled()
+  })
+
+  it('reuses only matching native rows and renders missing tree rows for a partial list', async () => {
+    const { docs, find, props } = nativeListFixture()
+    props.columnState[0].field.type = 'json'
+    Object.assign(props.data, { docs: [docs[0]], hasNextPage: true, totalPages: 2 })
+    props.columnState.forEach(col => { col.renderedCells = col.renderedCells.slice(0, 1) })
+    props.columnState.push({ accessor: 'slug', active: false, field: { name: 'slug', type: 'text' }, Heading: 'Slug', renderedCells: [] })
+    uiMocks.renderTable.mockImplementationOnce(((args: any) => ({
+      columnState: props.columnState.map(col => ({ ...col,
+        renderedCells: args.data.docs.map((doc: any) => `${col.accessor}:${doc.id}`),
+      })), Table: null,
+    })) as any)
+    const result = await NestedDocsPageTreeListView(props)
+    expect(find).toHaveBeenCalledTimes(1)
+    expect(uiMocks.renderTable).toHaveBeenCalledTimes(1)
+    expect((uiMocks.renderTable.mock.calls[0] as any)[0].data.docs.map((doc: any) => doc.id)).toEqual([1])
+    expect(result.props.renderedRowIDs).toEqual(['2', '1'])
+    expect(result.props.columnState[0].renderedCells).toEqual(['title:2', 'title:1'])
+    expect(result.props.columnState[1].renderedCells).toEqual(['createdAt:2', 'createdAt:1'])
+    expect(result.props.columnState.find((col: any) => col.accessor === 'slug').renderedCells).toEqual([])
+  })
+
+  it.each(['baseFilter', 'groupBy', 'trash', 'fastMode', 'badgesLinks'])('keeps the full query when native semantics may differ: %s', async (condition) => {
+    const { find, props } = nativeListFixture()
+    if (condition === 'baseFilter') {Object.assign(props.collectionConfig.admin, { baseFilter: () => ({}) })}
+    if (condition === 'groupBy') {Object.assign(props, { searchParams: { groupBy: 'parent' } })}
+    if (condition === 'trash') {props.viewType = 'trash'}
+    if (condition === 'fastMode') {props.collectionConfig.custom.nestedDocsPageTreePlugin.fastMode = false}
+    if (condition === 'badgesLinks') {Object.assign(props.collectionConfig.custom.nestedDocsPageTreePlugin, { badgesLinks: { liveURL: 'https://example.com' } })}
+    await NestedDocsPageTreeListView(props)
+    expect(find.mock.calls[0][0]).toMatchObject({ includeLockStatus: true, pagination: false })
+  })
+
+  it.each(['hidden-title', 'custom-cell', 'custom-link', 'rich-text'])('renders enriched tree rows for %s', async (condition) => {
+    const { docs, props } = nativeListFixture()
+    if (condition === 'hidden-title') {props.columnState[0].active = false}
+    if (condition === 'custom-cell') {Object.assign(props.collectionConfig, {
+      fields: [{ name: 'createdAt', type: 'date', admin: { components: { Cell: '/CustomCell' } } }],
+    })}
+    if (condition === 'custom-link') {Object.assign(props.collectionConfig.admin, { formatDocURL: () => '/custom' })}
+    if (condition === 'rich-text') {Object.assign(props.collectionConfig, {
+      fields: [{ name: 'createdAt', type: 'richText', editor: { CellComponent: '/EditorCell' } }],
+    })}
+    await NestedDocsPageTreeListView(props)
+    expect(uiMocks.renderTable).toHaveBeenCalledTimes(1)
+    expect((uiMocks.renderTable.mock.calls[0] as any)[0].data.docs.map((doc: any) => doc.id)).toEqual([1, 2])
+    expect((uiMocks.renderTable.mock.calls[0] as any)[0].data.docs[1]).toMatchObject({ ...docs[0], __pageTreeDepth: 1 })
+  })
+
   it.each([undefined, false, true])('selects tree fields only with fastMode=%s', async (fastMode) => {
     let cookie: null | string = null
     const baseFilter = ({ req }: { req: PayloadRequest }) => {
@@ -57,9 +194,9 @@ describe('NestedDocsPageTreeListView', () => {
             colors: {},
             labels: {},
           },
-          fastMode,
           breadcrumbsFieldSlug: 'breadcrumbs',
           defaultLimit: 100,
+          fastMode,
           hideBreadcrumbs: true,
           homeIndicator: {
             enabled: false,
@@ -99,11 +236,11 @@ describe('NestedDocsPageTreeListView', () => {
             id: true,
             slug: true,
             _status: true,
-            title: true,
-            parent: true,
             breadcrumbs: true,
+            meta: { rank: true, title: true },
+            parent: true,
             publishedAt: true,
-            meta: { title: true, rank: true },
+            title: true,
           }
         : undefined,
     )
@@ -168,7 +305,6 @@ describe('NestedDocsPageTreeListView', () => {
       custom: {
         nestedDocsPageTreePlugin: {
           badges: { colors: {}, labels: {} },
-          fastMode,
           badgesLinks: {
             liveURL: callback
               ? ({ doc, locale, path, req }: {
@@ -181,6 +317,7 @@ describe('NestedDocsPageTreeListView', () => {
           },
           breadcrumbsFieldSlug: 'breadcrumbs',
           defaultLimit: 100,
+          fastMode,
           hideBreadcrumbs: true,
           homeIndicator: { enabled: false },
           parentFieldSlug: 'parent',
@@ -297,11 +434,11 @@ describe('locale status badges', () => {
 
   async function renderLocaleList(
     options: {
-      fastMode?: boolean
-      callback?: boolean
       allowed?: string[]
+      callback?: boolean
       empty?: boolean
       enabled?: boolean
+      fastMode?: boolean
       localized?: boolean
     } = {},
   ) {

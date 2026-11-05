@@ -6,8 +6,11 @@ import { describe, expect, it, vi } from 'vitest'
 import PageTreeListViewClient from './PageTreeListView.client.js'
 
 vi.mock('@payloadcms/ui', () => ({
+  ChevronIcon: () => null,
   DefaultListView: ({ Table }: { Table: React.ReactNode }) => Table,
   ListQueryProvider: ({ children }: { children: React.ReactNode }) => children,
+  RenderDefaultCell: ({ clientProps }: { clientProps: { cellData: string; link: boolean; rowData: { id: number } } }) =>
+    React.createElement('span', { 'data-cell-id': clientProps.rowData.id, 'data-linked': clientProps.link }, clientProps.cellData),
   SortHeader: () => null,
   useAuth: () => ({ user: null }),
   useConfig: () => ({ config: { routes: { api: '/api' } } }),
@@ -54,6 +57,37 @@ function getDescriptionIDs(html: string): string[] {
 }
 
 describe('PageTreeListViewClient accessibility IDs', () => {
+  it('renders ordinary cells only for visible paginated rows using Payload defaults', () => {
+    const html = renderToString(React.createElement(PageTreeListViewClient, {
+      ...props,
+      columnState: [{ ...props.columnState[0], renderedCells: [] }],
+      query: { limit: 1, sort: '_order' },
+      renderDefaultCells: true,
+      renderedRowIDs: [],
+      sourceDocs: [
+        { id: 2, _order: 'a', parent: 1, title: 'Hidden child' },
+        { id: 1, _order: 'b', parent: null, title: 'Visible parent' },
+      ],
+    }))
+    expect(html).toContain('data-cell-id="1" data-linked="true">Visible parent')
+    expect(html).not.toContain('data-cell-id="2"')
+  })
+
+  it('matches cells by document ID when native order differs from tree order', () => {
+    const html = renderToString(React.createElement(PageTreeListViewClient, {
+      ...props,
+      columnState: [{ ...props.columnState[0], renderedCells: ['Child cell', 'Parent cell'] }],
+      renderedRowIDs: ['2', '1'],
+      sourceDocs: [
+        { id: 2, _order: 'a', parent: 1, title: 'Child' },
+        { id: 1, _order: 'b', parent: null, title: 'Parent' },
+      ],
+    }))
+    expect(html).toContain('Child cell')
+    expect(html).toContain('Parent cell')
+    expect(html.indexOf('Parent cell')).toBeLessThan(html.indexOf('Child cell'))
+  })
+
   it('keeps drag handle descriptions stable across unrelated context renders', () => {
     const tree = React.createElement(PageTreeListViewClient, props)
     const before = getDescriptionIDs(renderToString(tree))

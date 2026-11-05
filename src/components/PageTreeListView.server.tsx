@@ -1,4 +1,5 @@
 import type {
+  Column,
   ColumnPreference,
   ListQuery,
   ListViewClientProps,
@@ -21,6 +22,7 @@ import React from 'react'
 import type { NestedDocsPageTreePluginBadgesLinks, PageTreeSourceDoc } from '../types.js'
 
 import { resolvePageTreeBadgeLinks } from '../utilities/badgeLinks.js'
+import { canReuseListCells, getCompleteListDocs, getMissingListSelect, mergeListMetadata } from '../utilities/listReuse.js'
 import { getPageTreeListSelect } from '../utilities/listSelect.js'
 import { withPageTreeLocaleStatuses } from '../utilities/localeStatus.js'
 import { buildPageTreeDocs } from '../utilities/pageTree.js'
@@ -478,31 +480,35 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
   ])
   const where = Object.keys(mergedWhere).length > 0 ? mergedWhere : undefined
 
-  const fullResult = await props.payload.find({
+  const select = pageTreeConfig.fastMode && !pageTreeConfig.badgesLinks
+    ? getPageTreeListSelect({
+        breadcrumbsFieldSlug: pageTreeConfig.breadcrumbsFieldSlug,
+        columns: props.columnState,
+        orderableFieldName,
+        parentFieldSlug: pageTreeConfig.parentFieldSlug,
+        sort: effectiveSort,
+        useAsTitle: props.collectionConfig.admin.useAsTitle,
+      })
+    : undefined
+  const canReuseNativeList = Boolean(select) && !baseFilter && !query.groupBy &&
+    !query.queryByGroup && !query.trash && props.viewType !== 'trash'
+  const nativeDocs = canReuseNativeList ? getCompleteListDocs(props.data) : undefined
+  const missingSelect = nativeDocs && select ? getMissingListSelect(nativeDocs, select) : undefined
+  const findArgs = {
     collection: props.collectionSlug,
     depth: 0,
     draft: props.collectionConfig.versions?.drafts ? true : undefined,
     fallbackLocale: false,
-    includeLockStatus: true,
-    select:
-      pageTreeConfig.fastMode && !pageTreeConfig.badgesLinks
-        ? getPageTreeListSelect({
-            columns: props.columnState,
-            useAsTitle: props.collectionConfig.admin.useAsTitle,
-            parentFieldSlug: pageTreeConfig.parentFieldSlug,
-            breadcrumbsFieldSlug: pageTreeConfig.breadcrumbsFieldSlug,
-            orderableFieldName,
-            sort: effectiveSort,
-          })
-        : undefined,
+    includeLockStatus: !nativeDocs,
     locale,
     overrideAccess: false,
     pagination: false,
     req,
+    select: missingSelect ?? select,
     sort: normalizeSort(query.sort) ?? defaultSort,
     user: props.user,
-    where,
-  } as never)
+    where: nativeDocs ? { id: { in: nativeDocs.map(({ id }) => id) } } : where,
+  }
   const { clientCollectionConfig, clientConfig } = await getListClientConfig({
     collectionSlug: props.collectionSlug,
     i18n: props.i18n,
@@ -516,10 +522,17 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     clientConfig.localization
       ? clientConfig.localization.locales.map(({ code }: { code: string }) => code)
       : []
-  const treeSourceDocs = statusLocales.length
-    ? await withPageTreeLocaleStatuses({
+  const sourceDocsPromise: Promise<PageTreeSourceDoc[]> = nativeDocs
+    ? Object.keys(missingSelect!).length
+      ? props.payload.find(findArgs).then(({ docs }: PaginatedDocs<PageTreeSourceDoc>) => mergeListMetadata(nativeDocs, docs))
+      : Promise.resolve(nativeDocs)
+    : props.payload.find(findArgs).then(({ docs }: PaginatedDocs<PageTreeSourceDoc>) => docs)
+  // Locale status reads only need IDs, so they can overlap missing-metadata reads.
+  const statusSourceDocs = statusLocales.length && nativeDocs ? nativeDocs : await sourceDocsPromise
+  const statusPromise = statusLocales.length
+    ? withPageTreeLocaleStatuses({
         collectionSlug: props.collectionSlug,
-        docs: fullResult.docs as PageTreeSourceDoc[],
+        docs: statusSourceDocs,
         fastMode: pageTreeConfig.fastMode,
         localeBadgeStatus: pageTreeConfig.localeBadgeStatus,
         localeBadgeVisibility: pageTreeConfig.localeBadgeVisibility,
@@ -527,25 +540,47 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
         payload: props.payload,
         req,
       })
-    : await getDocsWithDisplayStatus({
-        fastMode: pageTreeConfig.fastMode,
+    : getDocsWithDisplayStatus({
         badgesLinks: pageTreeConfig.badgesLinks,
         breadcrumbsFieldSlug: pageTreeConfig.breadcrumbsFieldSlug,
         collectionConfig: props.collectionConfig,
         collectionSlug: props.collectionSlug,
-        docs: fullResult.docs as PageTreeSourceDoc[],
+        docs: statusSourceDocs,
+        fastMode: pageTreeConfig.fastMode,
         locale,
         payload: props.payload,
         req,
         user: props.user,
       })
+  const [sourceDocs, statusDocs] = await Promise.all([sourceDocsPromise, statusPromise])
+  const treeSourceDocs = statusLocales.length && nativeDocs
+    ? mergeListMetadata(statusDocs, sourceDocs)
+    : statusDocs
 
   const orderedDocs = buildPageTreeDocs(treeSourceDocs, {
     parentFieldSlug: pageTreeConfig.parentFieldSlug,
     sort: effectiveSort,
   })
+  const suppliedDocs: PageTreeSourceDoc[] = Array.isArray(props.data.docs) ? props.data.docs : []
+  const reuseCells = canReuseNativeList && canReuseListCells({
+    collectionConfig: props.collectionConfig,
+    columns: props.columnState,
+    docs: suppliedDocs,
+    useAsTitle: props.collectionConfig.admin.useAsTitle,
+  })
+  const renderDefaultCells = reuseCells && !props.collectionConfig.upload &&
+    (props.columnState as Column[]).every(column => !column.active || column.accessor === '_status' ||
+      ['text', 'textarea', 'email', 'number', 'date', 'checkbox', 'code'].includes(column.field?.type))
+  const treeIDs = new Set(orderedDocs.map(doc => doc.__pageTreeID))
+  const reusedIndices = reuseCells
+    ? suppliedDocs.flatMap((doc, index) => treeIDs.has(String(doc.id)) ? [index] : [])
+    : []
+  const reusedIDs = reusedIndices.map(index => String(suppliedDocs[index].id))
+  const reusedIDSet = new Set(reusedIDs)
+  const docsToRender = renderDefaultCells ? [] : orderedDocs.filter(doc => !reusedIDSet.has(doc.__pageTreeID))
+  const renderedRowIDs = renderDefaultCells ? [] : [...reusedIDs, ...docsToRender.map(doc => doc.__pageTreeID)]
   const orderedData: PaginatedDocs = {
-    docs: orderedDocs,
+    docs: docsToRender,
     hasNextPage: false,
     hasPrevPage: false,
     limit: normalizeLimit(query.limit, pageTreeConfig.defaultLimit),
@@ -566,16 +601,16 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     accessor,
     active: accessor === props.collectionConfig.admin.useAsTitle ? true : active,
   }))
-  const columns = getColumns({
+  const columns = !reuseCells || docsToRender.length ? getColumns({
     clientConfig,
     collectionConfig: clientCollectionConfig,
     collectionSlug: props.collectionSlug,
     columns: columnPreferences,
     i18n: props.i18n,
     permissions: props.permissions,
-  } as never)
+  } as never) : []
   const fieldPermissions = props.permissions?.collections?.[props.collectionSlug]?.fields ?? true
-  const renderedTable = renderTable({
+  const renderedTable = !reuseCells || docsToRender.length ? renderTable({
     clientCollectionConfig,
     clientConfig,
     collectionConfig: props.collectionConfig,
@@ -591,7 +626,22 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     tableAppearance: 'default',
     useAsTitle: props.collectionConfig.admin.useAsTitle,
     viewType: props.viewType,
-  } as never)
+  } as never) : undefined
+  const columnState: Column[] = (reuseCells
+    ? (props.columnState as Column[]).map(column => {
+        if (!column.active || renderDefaultCells) {
+          return { ...column, renderedCells: [] }
+        }
+        const rendered = renderedTable?.columnState.find(item => item.accessor === column.accessor)
+        return {
+          ...column,
+          renderedCells: reusedIndices.length === suppliedDocs.length && !docsToRender.length
+            ? column.renderedCells
+            : [...reusedIndices.map(index => column.renderedCells?.[index] ?? null), ...(rendered?.renderedCells ?? [])],
+        }
+      })
+    : renderedTable!.columnState
+  ).map(column => column.accessor === '_status' ? { ...column, renderedCells: [] } : column)
   const clientProps: Omit<ListViewClientProps, 'columnState' | 'Table'> = {
     AfterList: props.AfterList,
     AfterListTable: props.AfterListTable,
@@ -629,7 +679,7 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
       badgeConfig={pageTreeConfig.badges}
       badgesLinks={badgesLinks}
       canMoveDocs={canMoveDocs}
-      columnState={renderedTable.columnState}
+      columnState={columnState}
       homeIndicatorEnabled={pageTreeConfig.homeIndicator.enabled}
       orderableFieldName={orderableFieldName}
       parentFieldSlug={pageTreeConfig.parentFieldSlug}
@@ -641,7 +691,8 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
         // next query change doesn't pin the default columns into preferences.
         columns: query.columns ? transformColumnsToSearchParams(columnPreferences) : undefined,
       }}
-      renderedRowIDs={orderedDocs.map((doc) => doc.__pageTreeID)}
+      renderDefaultCells={renderDefaultCells}
+      renderedRowIDs={renderedRowIDs}
       sourceDocs={treeSourceDocs}
       useAsTitle={props.collectionConfig.admin.useAsTitle}
     />
